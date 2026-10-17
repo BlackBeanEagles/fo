@@ -1,0 +1,42 @@
+# Proof of Done
+
+An issue tracker for tasks that require action in the physical world. A task moves from request to vendor research, human approval, booking, and verified completion. Fo is the action agent; this app is the private control desk and evidence trail.
+
+## Run locally
+
+Requires Node.js 20 or newer.
+
+```powershell
+npm ci
+npm start
+```
+
+Open `http://127.0.0.1:4173/` in Chrome. Create a local workspace account, then click **Connect Fo**. The app registers an OAuth client with Wajo, redirects you to Wajo for authorization, and uses the authorized Fo MCP tools `ask_fo` and `get_fo_reply`. A Wajo login in another browser does not automatically authorize this app. The local callback must stay at `127.0.0.1:4173` (or use `localhost` consistently).
+
+Fo OAuth tokens, app login sessions, and registered Fo clients are held in server memory. Restarting the server requires signing back into the local workspace and reconnecting Fo. No Fo token is stored in the browser or committed to Git. Local tasks, password hashes, and evidence photos are in `.data/`, which is ignored by Git.
+
+## Try the real workflow
+
+1. Use **New task → Poster** for a short task you can actually finish. Add your city, print file details, deadline, and true spending limit before sending anything to Fo.
+2. Click **Ask Fo for quotes**. Review the exact task details and permitted outreach, then authorize it. The app sends a real MCP request. Its reply and conversation ID appear in the task, labeled **LIVE MCP**. **Check Fo reply** retrieves later results.
+3. Record an actual vendor quote, then approve one option. For a setback, mark the task blocked and use **Try another path**, or schedule an explicitly authorized Fo follow-up. Fo may research and contact providers within the shown scope; it may not spend or book during research.
+4. Only after a specific quote is approved, use **Ask Fo to book**. This sends the approved vendor and maximum total. A changed price, deposit, or payment request requires fresh approval.
+5. Record a booking only after obtaining its real confirmation. Mark done only after checking the physical outcome; add a photo or receipt if possible. Photos are served only to the task owner.
+
+The **Load demo workspace** and **Simulate next step** paths are labeled simulated and never call Fo. A Fo response, including one with status `complete`, does not automatically mark a task booked or verified.
+
+## GitHub issue integration
+
+The target repository is `BlackBeanEagles/fo`. Create a local app account first and set `GITHUB_TASK_OWNER` to that account's username. For webhook intake, set `GITHUB_WEBHOOK_SECRET` to a new random value and `GITHUB_ALLOWED_REPOSITORY=BlackBeanEagles/fo`. Configure GitHub's `issues` webhook to send to `https://YOUR_PUBLIC_HOST/api/github/webhook` with the same secret. An opened or newly labeled issue carrying label `fo` becomes a private task for that owner. Replayed events do not create duplicates.
+
+For status comments, also set `GITHUB_TOKEN` to a fine-grained token with **Issues: read and write** on this repository and `GITHUB_SYNC_COMMENTS=1`. Comments contain only task ID and high-level status; private Fo replies, vendor details, prices, and evidence stay in the app. After a verified completion is recorded, the integration closes the GitHub issue. GitHub must reach an HTTPS deployment or tunnel; the default `127.0.0.1` server is not reachable from GitHub. Do not publish a local test server with real credentials without HTTPS and deployment-grade session storage.
+
+## Privacy and limits
+
+- Tasks, receipts, evidence photos, and Fo calls are scoped to the signed-in local account. Tests cover cross-account access to task and Fo routes.
+- Booking and spending are gated by a human-selected vendor and quoted amount. The UI shows Fo's permitted action before sending it.
+- Follow-ups can run automatically only when the user explicitly opts in while Fo is connected. They can seek alternatives and quotes but cannot book or spend.
+- Fo tool responses are preserved as reported. Vendor quotes and booking confirmations must be checked before recording them as facts. Completion needs separate evidence.
+- This is a local hackathon build. Sessions and Fo tokens do not survive restarts; rate limiting, durable encrypted tokens, and production hosting are still needed for a public service.
+
+Run `npm test` to check workflow, GitHub webhook signatures and deduplication, photo ownership, and account isolation. See [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) for the real demo sequence and [SUBMISSION_DRAFT.md](SUBMISSION_DRAFT.md) for a draft writeup. Recording and posting are left for the team.

@@ -76,7 +76,7 @@ async function checkFollowUps() {
           foInFlight.add(task.id);
           try {
             const prompt = foPrompt(task, 'recover');
-            const reply = await askFo(task.ownerId, prompt);
+            const reply = await askFo(task.ownerId, prompt, task.fo?.externalId);
             const currentIndex = tasks.findIndex(item => item.id === task.id);
             if (currentIndex !== -1) tasks[currentIndex] = recordFoExchange(tasks[currentIndex], { intent: 'recover', prompt, reply });
           } catch (error) {
@@ -330,12 +330,18 @@ const server = createServer(async (req, res) => {
             updated = recordFoReply(tasks.find(item => item.id === id), reply);
           } else {
             const intent = String(json.intent || 'research');
-            if (!['research', 'recover', 'book'].includes(intent) || json.authorized !== true) return send(res, 400, { error: 'Choose and authorize the Fo action.' });
+            if (!['research', 'recover', 'book', 'message'].includes(intent) || json.authorized !== true) return send(res, 400, { error: 'Choose and authorize the Fo action.' });
             if (task.mode === 'demo' || ['completed', 'cancelled'].includes(task.status)) return send(res, 409, { error: 'Fo needs an open real task.' });
+            if (task.fo?.status === 'working' && intent !== 'message') return send(res, 409, { error: 'Fo is still working. Check the existing reply before sending another request.' });
             const selected = task.options.find(item => item.id === task.approvedOptionId);
             if (intent === 'book' && (task.status !== 'approved' || !selected)) return send(res, 409, { error: 'Approve a specific option before asking Fo to book.' });
-            const prompt = foPrompt(task, intent, selected);
-            const reply = await askFo(user.id, prompt);
+            if (intent === 'message' && !task.fo?.externalId) return send(res, 409, { error: 'Start a Fo conversation for this task first.' });
+            const message = String(json.message || '').trim();
+            if (intent === 'message' && (!message || message.length > 2000)) return send(res, 400, { error: 'Write a reply to Fo under 2,000 characters.' });
+            const prompt = intent === 'message'
+              ? `${message}\n\nContinue only this task. This free-form reply does not authorize booking, purchase, deposits, or payment. Ask for approval through the task workflow before any such action.`
+              : foPrompt(task, intent, selected);
+            const reply = await askFo(user.id, prompt, task.fo?.externalId);
             updated = recordFoExchange(tasks.find(item => item.id === id), { intent, prompt, reply });
           }
           const currentIndex = tasks.findIndex(item => item.id === id && item.ownerId === user.id);

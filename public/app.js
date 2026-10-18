@@ -138,10 +138,15 @@ function renderDetail(task) {
   if (['working', 'awaiting_approval', 'approved', 'booked', 'blocked'].includes(task.status)) actions.push(actionButton('schedule_followup', '⏱ Schedule reminder'));
   if (['working', 'awaiting_approval', 'approved', 'booked'].includes(task.status)) actions.push(actionButton('block', 'Mark blocked', 'quiet'));
   if (!['completed', 'cancelled'].includes(task.status) && task.mode !== 'demo' && state.foConnected) {
-    actions.push('<button type="button" class="primary" data-fo-intent="research">Ask Fo for quotes ↗</button>');
-    if (['working', 'blocked', 'awaiting_approval'].includes(task.status)) actions.push('<button type="button" class="secondary" data-fo-intent="recover">Try another path</button>');
-    if (task.status === 'approved') actions.push('<button type="button" class="secondary" data-fo-intent="book">Ask Fo to book</button>');
-    if (task.fo?.externalId) actions.push('<button type="button" class="secondary" data-fo-reply>Check Fo reply</button>');
+    if (task.fo?.status !== 'working') {
+      actions.push('<button type="button" class="primary" data-fo-intent="research">Ask Fo for quotes ↗</button>');
+      if (['working', 'blocked', 'awaiting_approval'].includes(task.status)) actions.push('<button type="button" class="secondary" data-fo-intent="recover">Try another path</button>');
+      if (task.status === 'approved') actions.push('<button type="button" class="secondary" data-fo-intent="book">Ask Fo to book</button>');
+    }
+    if (task.fo?.externalId) {
+      actions.push('<button type="button" class="secondary" data-fo-intent="message">Reply to Fo ↗</button>');
+      actions.push('<button type="button" class="secondary" data-fo-reply>Check Fo reply</button>');
+    }
   }
   if (!['completed', 'cancelled'].includes(task.status)) actions.push('<button type="button" class="quiet" data-copy-brief>Copy Fo brief</button>');
   if (['new', 'working', 'approved'].includes(task.status)) actions.push('<button type="button" class="quiet" data-demo>▶ Simulate next step</button>');
@@ -154,7 +159,7 @@ function renderDetail(task) {
     return `<div class="option comparison-option ${o.id === task.approvedOptionId ? 'chosen' : ''}"><div class="option-main"><div class="option-initial">${esc(o.vendor.slice(0, 1).toUpperCase())}</div><div><strong>${esc(o.vendor)} ${o.id === task.approvedOptionId ? '✓ Chosen' : ''}</strong><div class="quote-tags">${cheapest}${budgetLabel}</div><small>◷ ${esc(o.availability || 'Availability not recorded')}</small>${o.details ? `<p>${esc(o.details)}</p>` : ''}</div></div><div class="option-side"><b>${money(o.price)}</b>${task.status === 'awaiting_approval' ? `<button type="button" data-approve="${esc(o.id)}">Choose ↗</button>` : ''}</div></div>`;
   }).join('') : '<div class="subtle-empty">No options recorded yet. Add one when Fo returns a quote.</div>';
   const timeline = [...task.events].reverse().map(e => `<li><div class="timeline-dot"></div><div><p>${esc(e.text)} ${e.mode === 'demo' ? '<span class="demo-chip">SIMULATED</span>' : ''}</p><small>${e.channel ? `<span class="channel-chip ${esc(e.channel)}">${esc(e.channel.toUpperCase())}</span> ` : ''}${esc(e.actor)} · ${niceDate(e.at)}</small></div></li>`).join('');
-  const foPanel = task.fo?.lastResponse ? `<div class="fo-result"><div class="fo-result-top"><strong>Fo’s latest reply</strong><span>LIVE MCP · ${esc(task.fo.status)}</span></div><p>${esc(task.fo.lastResponse)}</p><small>${task.fo.externalId ? 'Conversation ' + esc(task.fo.externalId) + ' · ' : ''}${niceDate(task.fo.lastSyncedAt)}</small><div class="fo-result-note">Fo’s report is evidence of progress. Verify quotes, booking confirmations, and physical completion separately.</div></div>` : '';
+  const foPanel = task.fo?.lastResponse ? `<div class="fo-result"><div class="fo-result-top"><strong>Fo’s latest reply</strong><span>LIVE MCP · ${esc(task.fo.status)}</span></div><p>${esc(task.fo.lastResponse)}</p><small>Updated ${niceDate(task.fo.lastSyncedAt)}</small><div class="fo-result-note">Fo’s report is evidence of progress. Verify quotes, booking confirmations, and physical completion separately.</div></div>` : '';
   panel.innerHTML = `<div class="detail-inner"><div class="detail-header"><div class="eyebrow">TASK ${esc(task.id.slice(0, 8).toUpperCase())} ${task.mode === 'demo' ? '· SIMULATED SCENARIO' : ''}</div><div class="detail-heading"><div><div class="detail-category">${categoryIcons[task.category] || '✳'} ${esc(categoryNames[task.category] || 'Task')}</div><h2>${esc(task.title)}</h2></div><span class="status ${esc(task.status)}">${statusName(task.status)}</span></div><p>${esc(task.description || 'No details provided.')}</p></div>${stageMarkup(task)}${foPanel}${task.status === 'blocked' ? '<div class="state-banner blocked">This task is blocked. Review the activity and start a new path.</div>' : ''}${isDue(task) ? '<div class="state-banner due">Follow-up is due. Record the response or ask Fo to check back.</div>' : ''}<div class="fact-row"><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>DEADLINE</small><strong>${esc(task.deadline || 'Not set')}</strong></div><div><small>PRIORITY</small><strong>${task.priority === 'urgent' ? 'Urgent' : 'Normal'}</strong></div><div><small>SOURCE</small><strong>${task.source?.type === 'github' ? 'GitHub #' + esc(task.source.issue) : task.source?.type === 'demo' ? 'Demo scenario' : 'Direct request'}</strong></div></div><div class="detail-section"><div class="detail-section-head"><h3>Next move</h3><small>${task.nextFollowUp ? 'Follow up ' + niceDate(task.nextFollowUp) : 'Stay in control'}</small></div><div class="action-bar">${actions.join('') || '<span class="subtle-empty">No further action required.</span>'}</div></div><div class="detail-section"><div class="detail-section-head"><h3>Options</h3><small>${task.options.length} found</small></div>${options}</div>${task.booking ? `<div class="detail-section"><div class="detail-section-head"><h3>Booking</h3><small>${niceDate(task.booking.at)}</small></div><div class="receipt booking"><span>◇</span><div><strong>${task.status === 'completed' ? 'Booking confirmed' : 'Booked · outcome pending'}</strong><p>${esc(task.booking.confirmation)}</p></div></div></div>` : ''}${task.receipt ? `<div class="detail-section"><div class="detail-section-head"><h3>Proof of done</h3><small>${niceDate(task.receipt.at)}</small></div><div class="receipt complete"><span>✓</span><div><strong>Verified by ${esc(task.receipt.completedBy)}</strong><p>${esc(task.receipt.evidence)}</p></div></div>${task.receipt.photoFile ? `<img class="proof-photo" src="/api/tasks/${esc(task.id)}/evidence" alt="Private photo evidence for this task">` : ''}</div>` : ''}<div class="detail-section"><div class="detail-section-head"><h3>Every step, on record</h3><small>${task.events.length} events</small></div><ul class="timeline">${timeline}</ul></div></div>`;
 }
 
@@ -219,12 +224,17 @@ function openFoAction(intent) {
   if (!task || !state.foConnected) return;
   const chosen = task.options.find(item => item.id === task.approvedOptionId);
   state.foIntent = intent;
-  $('#foActionTitle').textContent = intent === 'book' ? 'Arrange the approved option' : intent === 'recover' ? 'Recover from a setback' : 'Find real options';
+  $('#foActionTitle').textContent = intent === 'message' ? 'Reply to Fo' : intent === 'book' ? 'Arrange the approved option' : intent === 'recover' ? 'Recover from a setback' : 'Find real options';
   const scope = intent === 'book'
     ? `Fo may arrange only ${chosen?.vendor || 'the approved vendor'} at up to ${money(chosen?.price)}. No deposit or card details. Any change needs new approval.`
-    : 'Fo may contact up to three relevant providers for quotes and availability. Fo may not book, buy, or spend.';
-  $('#foActionSummary').innerHTML = `<div><small>TASK</small><strong>${esc(task.title)}</strong></div><div><small>DETAILS SHARED WITH FO</small><p>${esc(task.description || 'No details added')}</p></div><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>PERMITTED ACTION</small><p>${esc(scope)}</p></div>`;
+    : intent === 'message'
+      ? 'Your exact reply goes to this task’s existing Fo conversation. This reply cannot authorize booking, purchase, or payment; use the approved booking flow for that.'
+      : 'Fo may contact up to three relevant providers for quotes and availability. Fo may not book, buy, or spend.';
+  $('#foActionSummary').innerHTML = intent === 'message'
+    ? `<div><small>TASK</small><strong>${esc(task.title)}</strong></div><div><small>FO’S LATEST REPLY</small><p>${esc(task.fo?.lastResponse || 'No reply yet.')}</p></div><label>Your reply to Fo<textarea name="message" rows="4" maxlength="2000" required placeholder="Answer Fo’s question or ask for a precise update"></textarea></label><div><small>PERMITTED ACTION</small><p>${esc(scope)}</p></div>`
+    : `<div><small>TASK</small><strong>${esc(task.title)}</strong></div><div><small>DETAILS SHARED WITH FO</small><p>${esc(task.description || 'No details added')}</p></div><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>PERMITTED ACTION</small><p>${esc(scope)}</p></div>`;
   $('#foActionForm').reset();
+  $('#foActionSubmit').textContent = intent === 'message' ? 'Send reply to Fo ↗' : 'Send to Fo ↗';
   $('#foActionDialog').showModal();
 }
 
@@ -317,10 +327,10 @@ $('#foActionForm').addEventListener('submit', async event => {
   event.preventDefault();
   const button = $('#foActionSubmit'); button.disabled = true; button.textContent = 'Fo is working…';
   try {
-    await api(`/api/tasks/${state.selectedId}/fo/ask`, { method: 'POST', body: JSON.stringify({ intent: state.foIntent, authorized: true }) });
+    await api(`/api/tasks/${state.selectedId}/fo/ask`, { method: 'POST', body: JSON.stringify({ intent: state.foIntent, message: event.target.elements.message?.value, authorized: true }) });
     $('#foActionDialog').close(); await refresh(); toast('Live Fo reply recorded.');
   } catch (error) { toast(error.message, true); }
-  finally { button.disabled = false; button.textContent = 'Send to Fo ↗'; }
+  finally { button.disabled = false; button.textContent = state.foIntent === 'message' ? 'Send reply to Fo ↗' : 'Send to Fo ↗'; }
 });
 $('#taskSearch').addEventListener('input', event => { state.search = event.target.value.trim().toLowerCase(); render(); });
 $('#taskForm').addEventListener('submit', async event => {

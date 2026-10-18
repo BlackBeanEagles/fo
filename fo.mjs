@@ -96,19 +96,27 @@ function responseOf(result) {
   };
 }
 
-async function toolCall(userId, name, args) {
-  return withClient(userId, async client => {
-    const list = await client.listTools();
-    const tool = list.tools.find(item => item.name === name);
-    if (!tool) throw new Error(`Fo did not expose ${name}. Reconnect and check your MCP access.`);
-    const result = await client.callTool({ name, arguments: args });
-    return responseOf(result);
-  });
+export function askFoArguments(message, conversationId, properties) {
+  const args = { message };
+  if (conversationId) {
+    if (!('conversationId' in properties)) throw new Error('Fo does not support an explicit conversation ID. Reconnect before continuing this task.');
+    args.conversationId = conversationId;
+  } else {
+    if (!('newConversation' in properties)) throw new Error('Fo does not support starting an isolated conversation. Reconnect before creating a new task.');
+    args.newConversation = true;
+  }
+  return args;
 }
 
-export async function askFo(userId, message) {
+export async function askFo(userId, message, conversationId = null) {
   if (!message || message.length > 8000) throw new Error('Enter a Fo request under 8,000 characters.');
-  return toolCall(userId, 'ask_fo', { message });
+  return withClient(userId, async client => {
+    const list = await client.listTools();
+    const tool = list.tools.find(item => item.name === 'ask_fo');
+    if (!tool) throw new Error('Fo did not expose ask_fo. Reconnect and check your MCP access.');
+    const args = askFoArguments(message, conversationId, tool.inputSchema?.properties || {});
+    return responseOf(await client.callTool({ name: tool.name, arguments: args }));
+  });
 }
 
 export async function getFoReply(userId, conversationId) {

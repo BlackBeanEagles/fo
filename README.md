@@ -18,7 +18,7 @@ Fo OAuth tokens, app login sessions, and registered Fo clients are held in serve
 ## Try the real workflow
 
 1. Use **New task → Poster** for a short task you can actually finish, or open the imported GitHub poster issue. Use **Edit brief** to add your city, print file details, deadline, and true spending limit before sending anything to Fo. These added details stay in your private workspace.
-2. Click **Ask Fo for quotes**. Review the exact task details and permitted outreach, then authorize it. The app sends a real MCP request. Its reply and conversation ID appear in the task, labeled **LIVE MCP**. **Check Fo reply** retrieves later results.
+2. Click **Ask Fo for quotes**. Review the exact task details and permitted outreach, then authorize it. The app sends a real MCP request in a new Fo conversation and keeps its conversation ID private. The reply appears in the task, labeled **LIVE MCP**. **Check Fo reply** retrieves later results. If Fo asks a question, **Reply to Fo** continues that same conversation; the exact reply is shown before sending.
 3. Record an actual vendor quote, then approve one option. For a setback, mark the task blocked and use **Try another path**, or schedule an explicitly authorized Fo follow-up. Fo may research and contact providers within the shown scope; it may not spend or book during research.
 4. Only after a specific quote is approved, use **Ask Fo to book**. This sends the approved vendor and maximum total. A changed price, deposit, or payment request requires fresh approval.
 5. Record a booking only after obtaining its real confirmation. Mark done only after checking the physical outcome; add a photo or receipt if possible. Photos are served only to the task owner.
@@ -38,7 +38,7 @@ For status comments, also set `GITHUB_TOKEN` to a fine-grained token with **Issu
 - Tasks, receipts, evidence photos, and Fo calls are scoped to the signed-in local account. Tests cover cross-account access to task and Fo routes.
 - Booking and spending are gated by a human-selected vendor and quoted amount. The UI shows Fo's permitted action before sending it.
 - Follow-ups can run automatically only when the user explicitly opts in while Fo is connected. They can seek alternatives and quotes but cannot book or spend.
-- Fo tool responses are preserved as reported. Vendor quotes and booking confirmations must be checked before recording them as facts. Completion needs separate evidence.
+- Fo tool responses are preserved as reported. Vendor quotes and booking confirmations must be checked before recording them as facts. Completion needs separate evidence. A free-form reply to Fo cannot authorize booking or spending; use the gated booking flow.
 - This is a local hackathon build. Sessions and Fo tokens do not survive restarts; rate limiting, durable encrypted tokens, and production hosting are still needed for a public service.
 
 Run `npm test` to check workflow, GitHub webhook signatures and deduplication, photo ownership, and account isolation. See [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) for the real demo sequence and [SUBMISSION_DRAFT.md](SUBMISSION_DRAFT.md) for a draft writeup. Recording and posting are left for the team.

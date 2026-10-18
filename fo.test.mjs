@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTask, applyAction, recordFoExchange, recordFoReply } from './workflow.mjs';
 import { foPrompt } from './fo-prompt.mjs';
+import { askFoArguments } from './fo.mjs';
 
 test('Fo cannot book without a specific human approved option', () => {
   const task = createTask({ title: 'Print one poster', budget: 40 });
@@ -27,4 +28,12 @@ test('A live Fo response preserves conversation identity without claiming comple
   assert.equal(reply.events.at(-1).conversationId, 'conversation-123');
   assert.equal(reply.status, 'working');
   assert.equal(recordFoReply(reply, { text: 'Shop B has no availability.', status: 'complete', conversationId: 'conversation-123' }), reply);
+});
+
+test('each task starts an isolated Fo conversation and follow-ups use its exact ID', () => {
+  const schema = { message: {}, conversationId: {}, newConversation: {} };
+  assert.deepEqual(askFoArguments('Find quotes', null, schema), { message: 'Find quotes', newConversation: true });
+  assert.deepEqual(askFoArguments('Yes, send both', 'conversation-123', schema), { message: 'Yes, send both', conversationId: 'conversation-123' });
+  assert.throws(() => askFoArguments('Find quotes', null, { message: {} }), /isolated conversation/);
+  assert.throws(() => askFoArguments('Continue', 'conversation-123', { message: {} }), /explicit conversation ID/);
 });

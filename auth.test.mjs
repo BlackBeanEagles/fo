@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { createServer } from 'node:net';
 import { createHmac } from 'node:crypto';
@@ -16,7 +15,9 @@ async function availablePort() {
 }
 
 test('accounts only access their own tasks and receipts', async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), 'fo-auth-'));
+  const testRoot = join(import.meta.dirname, '.data', 'test-runs');
+  await mkdir(testRoot, { recursive: true });
+  const dataDir = await mkdtemp(join(testRoot, 'fo-auth-'));
   const port = await availablePort();
   const base = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ['server.mjs'], {
@@ -54,6 +55,7 @@ test('accounts only access their own tasks and receipts', async () => {
     assert.equal((await request(`/api/tasks/${id}/fo/reply`, { method: 'POST', body: '{}' }, bob.cookie)).status, 404);
     assert.equal((await request('/api/status', {}, alice.cookie)).body.fo.connected, false);
     assert.equal((await request('/api/status', {}, bob.cookie)).body.fo.connected, false);
+    assert.equal((await request('/api/github/sync', { method: 'POST', body: '{}' }, bob.cookie)).status, 403);
     assert.equal((await request(`/api/tasks/${id}`, {}, alice.cookie)).status, 200);
     await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'start' }) }, alice.cookie);
     const quoted = await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'add_option', vendor: 'Print shop', price: 25 }) }, alice.cookie);
@@ -81,7 +83,7 @@ test('accounts only access their own tasks and receipts', async () => {
   } finally {
     child.kill();
     await new Promise(resolve => child.once('exit', resolve));
-    const safeRoot = resolve(tmpdir()) + sep;
+    const safeRoot = resolve(testRoot) + sep;
     if (resolve(dataDir).startsWith(safeRoot)) await rm(dataDir, { recursive: true, force: true });
   }
 });

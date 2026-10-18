@@ -8,6 +8,7 @@ import { beginFoConnection, completeFoConnection, connectionStatus, disconnectFo
 import { foPrompt } from './fo-prompt.mjs';
 import { createDemoWorkspace, demoActionFor } from './demo.mjs';
 import { dueForFollowUp, recordFollowUpDue } from './followups.mjs';
+import { listFoIssues, parseAllowedRepository } from './github-issues.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(root, '.data');
@@ -23,6 +24,42 @@ let saveQueue = Promise.resolve();
 let userSaveQueue = Promise.resolve();
 let checkingFollowUps = false;
 const foInFlight = new Set();
+let syncingIssues = false;
+
+function githubOwner() {
+  const repository = parseAllowedRepository(process.env.GITHUB_ALLOWED_REPOSITORY);
+  const owner = users.find(item => item.username === String(process.env.GITHUB_TASK_OWNER || '').toLowerCase());
+  return repository && owner ? { repository, owner } : null;
+}
+
+async function syncIssues() {
+  const config = githubOwner();
+  if (!config) throw new Error('Configure the allowed GitHub repository and a local task owner first.');
+  if (syncingIssues) return { imported: 0, busy: true };
+  syncingIssues = true;
+  try {
+    const found = await listFoIssues(config.repository, process.env.GITHUB_TOKEN);
+    let imported = 0;
+    for (const issue of found) {
+      if (tasks.some(task => task.source?.type === 'github' &&
+          task.source.owner.toLowerCase() === issue.source.owner.toLowerCase() &&
+          task.source.repo.toLowerCase() === issue.source.repo.toLowerCase() &&
+          task.source.issue === issue.source.issue)) continue;
+      const task = createTask(issue, issue.source);
+      task.ownerId = config.owner.id;
+      tasks.unshift(task);
+      imported++;
+    }
+    if (imported) await save();
+    return { imported, checked: found.length };
+  } finally { syncingIssues = false; }
+}
+
+async function pollIssues() {
+  if (process.env.GITHUB_POLL !== '1' || !githubOwner()) return;
+  try { await syncIssues(); }
+  catch (error) { console.error('GitHub issue poll failed:', error.message); }
+}
 
 async function checkFollowUps() {
   if (checkingFollowUps) return;
@@ -172,7 +209,7 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { user: user ? { id: user.id, username: user.username } : null });
     }
     const user = currentUser(req);
-    if (req.method === 'GET' && path === '/api/status') return send(res, 200, { mode: 'local-prototype', fo: user ? connectionStatus(user.id) : { connected: false, pending: false, tools: [] }, githubWebhookEnabled: !!process.env.GITHUB_WEBHOOK_SECRET, githubCommentsEnabled: !!process.env.GITHUB_TOKEN && process.env.GITHUB_SYNC_COMMENTS === '1' });
+    if (req.method === 'GET' && path === '/api/status') return send(res, 200, { mode: 'local-prototype', fo: user ? connectionStatus(user.id) : { connected: false, pending: false, tools: [] }, githubWebhookEnabled: !!process.env.GITHUB_WEBHOOK_SECRET, githubCommentsEnabled: !!process.env.GITHUB_TOKEN && process.env.GITHUB_SYNC_COMMENTS === '1', githubIssueSyncEnabled: !!user && githubOwner()?.owner.id === user.id, githubIssuePollingEnabled: process.env.GITHUB_POLL === '1' && !!githubOwner() });
     if (req.method === 'GET' && path === '/api/tasks') {
       if (!user) return send(res, 401, { error: 'Sign in to see your tasks.' });
       return send(res, 200, { tasks: tasks.filter(task => task.ownerId === user.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) });
@@ -247,6 +284,11 @@ const server = createServer(async (req, res) => {
         return send(res, 201, { task });
       }
       if (!user) return send(res, 401, { error: 'Sign in to manage tasks.' });
+      if (path === '/api/github/sync') {
+        if (githubOwner()?.owner.id !== user.id) return send(res, 403, { error: 'GitHub sync belongs to another workspace account.' });
+        const result = await syncIssues();
+        return send(res, 200, result);
+      }
       if (path === '/api/fo/connect') {
         const requestOrigin = new URL(`http://${req.headers.host}`);
         if (!['127.0.0.1', 'localhost'].includes(requestOrigin.hostname) || requestOrigin.port !== String(port)) return send(res, 400, { error: 'Fo OAuth requires this local 127.0.0.1 or localhost preview.' });
@@ -345,3 +387,5 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => console.log(`Proof of Done running at http://${host}:${port}`));
 setInterval(checkFollowUps, 10_000).unref();
 void checkFollowUps();
+setInterval(pollIssues, 120_000).unref();
+void pollIssues();

@@ -59,6 +59,7 @@ async function refresh() {
   if (!state.user || state.user.id !== accountId) return;
   state.tasks = tasks;
   state.foConnected = !!status.fo?.connected;
+    $('#syncGitHub').hidden = !status.githubIssueSyncEnabled;
   renderFoConnection();
   if (!tasks.some(t => t.id === state.selectedId)) state.selectedId = tasks[0]?.id || null;
   render();
@@ -294,6 +295,16 @@ $('#connectFo').addEventListener('click', connectFo);
 $('#connectFoInline').addEventListener('click', connectFo);
 $('#disconnectFo').addEventListener('click', disconnectFoAccount);
 $('#disconnectFoInline').addEventListener('click', disconnectFoAccount);
+$('#syncGitHub').addEventListener('click', async () => {
+  const button = $('#syncGitHub');
+  button.disabled = true;
+  try {
+    const result = await api('/api/github/sync', { method: 'POST', body: '{}' });
+    await refresh();
+    toast(result.imported ? `${result.imported} GitHub issue${result.imported === 1 ? '' : 's'} added.` : 'GitHub issues are up to date.');
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+});
 $('#foActionForm').addEventListener('submit', async event => {
   event.preventDefault();
   const button = $('#foActionSubmit'); button.disabled = true; button.textContent = 'Fo is working…';

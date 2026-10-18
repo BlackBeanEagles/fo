@@ -28,6 +28,8 @@ test('A live Fo response preserves conversation identity without claiming comple
   assert.equal(reply.events.at(-1).conversationId, 'conversation-123');
   assert.equal(reply.status, 'working');
   assert.equal(recordFoReply(reply, { text: 'Shop B has no availability.', status: 'complete', conversationId: 'conversation-123' }), reply);
+  assert.throws(() => recordFoReply(sent, { text: 'Unrelated result', status: 'complete', conversationId: 'conversation-456' }), /different conversation/);
+  assert.throws(() => recordFoExchange(sent, { intent: 'message', prompt: 'Continue', reply: { text: 'Unrelated result', status: 'complete', conversationId: 'conversation-456' } }), /different conversation/);
 });
 
 test('each task starts an isolated Fo conversation and follow-ups use its exact ID', () => {

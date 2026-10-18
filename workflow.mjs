@@ -136,6 +136,7 @@ export function applyAction(task, action) {
 
 export function recordFoExchange(task, { intent, prompt, reply }) {
   if (!active.has(task.status) || task.mode === 'demo') throw new Error('Fo can only run on an open real task.');
+  if (task.fo?.externalId && reply.conversationId && reply.conversationId !== task.fo.externalId) throw new Error('Fo returned a different conversation for this task. No reply was recorded.');
   const now = new Date().toISOString();
   const next = structuredClone(task);
   if (next.status === 'new' || next.status === 'blocked') next.status = 'working';
@@ -153,6 +154,7 @@ export function recordFoExchange(task, { intent, prompt, reply }) {
 
 export function recordFoReply(task, reply) {
   if (task.mode === 'demo' || !task.fo?.externalId) throw new Error('No live Fo conversation exists.');
+  if (reply.conversationId && reply.conversationId !== task.fo.externalId) throw new Error('Fo returned a different conversation for this task. No reply was recorded.');
   const now = new Date().toISOString();
   const next = structuredClone(task);
   const text = String(reply.text || '').slice(0, 12000);

@@ -154,7 +154,7 @@ async function syncGitHub(task) {
   const { GITHUB_TOKEN } = process.env;
   if (!GITHUB_TOKEN || process.env.GITHUB_SYNC_COMMENTS !== '1' || task.source?.type !== 'github') return;
   const { owner, repo, issue } = task.source;
-  const comment = `**Proof of Done · ${task.status.replaceAll('_', ' ')}**\n\nA private workspace update is available to the task owner. Vendor messages, prices, and receipts stay in the workspace.\n\nTask ID: ${task.id}`;
+  const comment = `**Proof of Done · ${task.status.replaceAll('_', ' ')}**\n\nA private workspace update is available to the task owner. Vendor messages, prices, and receipts stay in the workspace.`;
   try {
     const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue}/comments`, {
       method: 'POST',

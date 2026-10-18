@@ -418,7 +418,7 @@ const server = createServer(async (req, res) => {
           tasks[currentIndex] = updated;
           await save();
           await saveFoConnection(user.id).catch(error => console.error(`Fo connection save failed: ${error.message}`));
-          if (foMatch[2] === 'ask' || updated !== task) void syncGitHub(updated);
+          if (updated.status !== task.status) void syncGitHub(updated);
           return send(res, 200, { task: updated });
         } catch (error) {
           if (traceContext) {
@@ -443,6 +443,7 @@ const server = createServer(async (req, res) => {
           if (!action) return send(res, 400, { error: 'Approve an option or verify the outcome to continue.' });
         }
         if (action.type === 'schedule_followup' && action.autoFollowUp === true && (tasks[index].mode === 'demo' || !connectionStatus(user.id).connected)) return send(res, 409, { error: 'Connect Fo and use a real task before scheduling an automatic follow-up.' });
+        const previousStatus = tasks[index].status;
         const task = applyAction(tasks[index], action);
         if (action.type === 'complete' && json.photoData) {
           const match = String(json.photoData).match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/);
@@ -458,7 +459,7 @@ const server = createServer(async (req, res) => {
         }
         if (action.mode === 'demo') task.mode = 'demo';
         tasks[index] = task; await save();
-        if (action.mode !== 'demo') void syncGitHub(task);
+        if (action.mode !== 'demo' && task.status !== previousStatus) void syncGitHub(task);
         return send(res, 200, { task });
       }
     }

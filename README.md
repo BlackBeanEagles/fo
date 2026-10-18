@@ -32,7 +32,7 @@ The target repository is `BlackBeanEagles/fo`. Create a local app account first 
 
 For webhook intake instead, set `GITHUB_WEBHOOK_SECRET` to a new random value. Configure GitHub's `issues` webhook to send to `https://YOUR_PUBLIC_HOST/api/github/webhook` with the same secret. An opened or newly labeled issue carrying label `fo` becomes a private task for the configured owner. Replayed events do not create duplicates.
 
-For status comments, also set `GITHUB_TOKEN` to a fine-grained token with **Issues: read and write** on this repository and `GITHUB_SYNC_COMMENTS=1`. Comments contain only a high-level status; private Fo replies, vendor details, prices, and evidence stay in the app. After a verified completion is recorded, the integration closes the GitHub issue. GitHub must reach an HTTPS deployment or tunnel for webhooks; the default `127.0.0.1` server is not reachable from GitHub. Do not publish a local test server with real credentials without HTTPS and deployment-grade session storage.
+For status comments, also set `GITHUB_TOKEN` to a fine-grained token with **Issues: read and write** on this repository and `GITHUB_SYNC_COMMENTS=1`. Comments are posted on task state changes and contain only the high-level status; repeated Fo checks do not post duplicates. Private Fo replies, vendor details, prices, and evidence stay in the app. After a verified completion is recorded, the integration closes the GitHub issue. GitHub must reach an HTTPS deployment or tunnel for webhooks; the default `127.0.0.1` server is not reachable from GitHub. Do not publish a local test server with real credentials without HTTPS and deployment-grade session storage.
 
 ## Privacy and limits
 

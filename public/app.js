@@ -73,7 +73,7 @@ function renderFoConnection() {
   $('#connectFoInline').hidden = state.foConnected;
   $('#disconnectFoInline').hidden = !state.foConnected;
   $('#foInlineStatus').textContent = state.foConnected ? 'Fo connected · live actions ready' : 'Fo is not connected · demo steps are simulated';
-  $('#modeDisclosure').innerHTML = state.foConnected ? `<strong>Live connection:</strong> ${state.runs.runs} real Fo run${state.runs.runs === 1 ? '' : 's'} · ${state.runs.verified} verified outcome${state.runs.verified === 1 ? '' : 's'}. Booking and completion still require proof.` : '<strong>Local mode:</strong> Connect Fo to make real requests. Sample scenarios remain simulated.';
+  $('#modeDisclosure').innerHTML = `<strong>${state.foConnected ? 'Fo connected' : 'Fo disconnected'}:</strong> ${state.runs.runs} logged real run${state.runs.runs === 1 ? '' : 's'} · ${state.runs.verified} human-verified outcome${state.runs.verified === 1 ? '' : 's'}. Sample scenarios are simulated; booking and completion require proof.`;
 }
 function setFilter(filter) {
   state.filter = filter;

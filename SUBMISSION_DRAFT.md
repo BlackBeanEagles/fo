@@ -13,6 +13,7 @@
 - One real poster task has been sent to Fo. Fo reported sending two quote-request emails and scheduling a follow-up. The app has no vendor quote, booking, print-ready file, pickup, or completion proof yet. This is **one started real task, zero human-verified completions**.
 - The first run predates exact MCP-call telemetry. Its export contains the saved Fo request and responses but labels later tool names as unattributed. The approval sent in Wajo's own chat is outside the app trace. A new run through the updated app is needed for a complete app-to-Fo trace.
 - The demo workspace and “Simulate next step” remain simulated. Never present those cards as live Fo outcomes.
+- GitHub issue [#1](https://github.com/BlackBeanEagles/fo/issues/1) has been imported into the owner workspace by live polling. It has not yet started a Fo run or received an issue status update, so the full issue-to-Fo-to-issue loop remains unverified.
 
 ## Form fields to prepare
 

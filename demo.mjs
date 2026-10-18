@@ -5,7 +5,8 @@ const demo = { actor: 'Fo demo', mode: 'demo' };
 export function createDemoWorkspace() {
   const repair = createTask({
     title: 'Fix the office projector', category: 'repair', priority: 'urgent', budget: 180,
-    description: 'Screen flickers during presentations. Find someone available this week. Ask before booking.'
+    description: 'Screen flickers during presentations. Find someone available this week. Ask before booking.',
+    doneWhen: 'A teammate tests the projector and confirms a clear display.'
   }, { type: 'demo' });
   let a = applyAction(repair, { type: 'start', note: 'Simulated: Fo called local repair shops and asked for availability.', channel: 'call', ...demo });
   a = applyAction(a, { type: 'message', party: 'Demo Device Clinic', direction: 'inbound', note: 'We can visit tomorrow between 2 and 4 PM. Diagnostics are included.', channel: 'call', ...demo });
@@ -16,7 +17,8 @@ export function createDemoWorkspace() {
 
   const lunch = createTask({
     title: 'Arrange team lunch for 12', category: 'event', priority: 'normal', budget: 250,
-    description: 'Vegetarian options needed. Delivery by noon. Collect a quote and ask before ordering.'
+    description: 'Vegetarian options needed. Delivery by noon. Collect a quote and ask before ordering.',
+    doneWhen: 'Lunch arrives for all 12 people by noon and a teammate checks the order.'
   }, { type: 'demo' });
   let b = applyAction(lunch, { type: 'start', note: 'Simulated: Fo emailed caterers and gathered dietary requirements.', nextFollowUp: new Date(Date.now() - 60_000).toISOString(), channel: 'email', ...demo });
   b = applyAction(b, { type: 'message', party: 'Demo Lunch Studio', direction: 'outbound', note: 'Asked for a vegetarian-friendly menu and delivery before noon.', channel: 'email', ...demo });
@@ -24,7 +26,8 @@ export function createDemoWorkspace() {
 
   const supplies = createTask({
     title: 'Restock the office fridge', category: 'purchase', priority: 'normal', budget: 90,
-    description: 'Water, sparkling drinks, fruit, and snacks for the Monday meeting.'
+    description: 'Water, sparkling drinks, fruit, and snacks for the Monday meeting.',
+    doneWhen: 'The requested items arrive and a teammate checks the delivery.'
   }, { type: 'demo' });
   let c = applyAction(supplies, { type: 'start', note: 'Simulated: Fo compared local grocery delivery options.', channel: 'web', ...demo });
   c = applyAction(c, { type: 'add_option', vendor: 'Demo Market Delivery', price: 78, availability: 'Monday, 8–9 AM', details: 'All requested items in stock. Simulated quote.', channel: 'web', ...demo });

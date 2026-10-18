@@ -11,7 +11,8 @@ test('a booking is not treated as completed without human evidence', () => {
   assert.equal(task.status, 'booked');
   assert.equal(task.receipt, null);
   assert.throws(() => applyAction(task, { type: 'complete' }), /evidence/);
-  task = applyAction(task, { type: 'complete', evidence: 'Repaired and tested.', actor: 'Owner' });
+  assert.throws(() => applyAction(task, { type: 'complete', evidence: 'Repaired and tested.' }), /person checked/);
+  task = applyAction(task, { type: 'complete', evidence: 'Repaired and tested.', verified: true, actor: 'Owner' });
   assert.equal(task.status, 'completed');
   assert.equal(task.receipt.completedBy, 'Owner');
 });
@@ -47,8 +48,9 @@ test('conversation records direction and schedules a reminder without claiming c
 
 test('owner can revise an imported task brief without changing its source or approval state', () => {
   let task = createTask({ title: 'Print poster' }, { type: 'github', owner: 'BlackBeanEagles', repo: 'fo', issue: 1 });
-  task = applyAction(task, { type: 'edit', title: 'Print A3 poster', description: 'Pickup in downtown by Friday', budget: '30', deadline: '2026-10-19', actor: 'owner' });
+  task = applyAction(task, { type: 'edit', title: 'Print A3 poster', description: 'Pickup in downtown by Friday', doneWhen: 'Poster collected and photographed', budget: '30', deadline: '2026-10-19', actor: 'owner' });
   assert.equal(task.description, 'Pickup in downtown by Friday');
+  assert.equal(task.doneWhen, 'Poster collected and photographed');
   assert.equal(task.budget, 30);
   assert.equal(task.source.issue, 1);
   assert.equal(task.status, 'new');

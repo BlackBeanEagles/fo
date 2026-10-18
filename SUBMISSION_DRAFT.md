@@ -1,19 +1,44 @@
-# Submission draft — edit after the real task succeeds
+# Submission kit — draft, not submitted
 
-**Project:** Proof of Done
+## Positioning
 
-**One line:** GitHub issues for real-world work, with Fo doing the outside-world actions and a human verifying the result.
+**Project:** Proof of Done — an outcome contract for real-world issues.
 
-**Who needs it:** Small teams whose requests require phone calls, vendor quotes, appointments, purchases, or physical pickup. Their current tracker records a plan but rarely proves the work happened.
+**Who it serves:** A small team whose ticket says “get this fixed” but whose work happens across calls, email, quotes, approval, and physical delivery. A useful next-week example is a team needing a broken office device repaired without losing track of who approved the cost or whether it works again.
 
-**What Fo did:** [Insert only verified Fo actions: providers contacted, response, quote, retry, confirmation.]
+**What is distinct:** Fo does the outside-world outreach. Proof of Done turns an issue into an explicit success check, gives Fo a bounded brief, records its MCP calls and human decisions, and keeps the issue open until a person checks the result. Recovery after a setback is part of the same record. GitHub receives only a coarse status; vendor messages and receipts stay with the task owner.
 
-**Trust:** The owner sees the task details and outreach scope before a Fo call. A specific quote and maximum amount require approval before booking. Vendor replies remain private to the workspace; the GitHub issue receives only a high-level status. Another account cannot see the task or its evidence.
+## Current honest evidence (update before recording)
 
-**Outcome:** [Insert real confirmation number or link, what was physically delivered, and the photo or receipt used to verify it.]
+- One real poster task has been sent to Fo. Fo reported sending two quote-request emails and scheduling a follow-up. The app has no vendor quote, booking, print-ready file, pickup, or completion proof yet. This is **one started real task, zero human-verified completions**.
+- The first run predates exact MCP-call telemetry. Its export contains the saved Fo request and responses but labels later tool names as unattributed. The approval sent in Wajo's own chat is outside the app trace. A new run through the updated app is needed for a complete app-to-Fo trace.
+- The demo workspace and “Simulate next step” remain simulated. Never present those cards as live Fo outcomes.
 
-**Technical notes:** Fo MCP OAuth with PKCE, `ask_fo`/`get_fo_reply`, saved conversation IDs, GitHub issue webhooks, signed requests, per-account task and proof access, and explicit simulated/live labels.
+## Form fields to prepare
 
-**Community caption idea:** “An issue should close when the real-world job is actually done. We built Proof of Done with Fo: request → real outreach → quote → approval → booking → proof. Watch the outcome, not just the plan.”
+**A — X quote-repost link:** [Insert after posting.]
 
-Keep participant-only access instructions, credentials, private account names, and unverified vendor claims out of public posts. The demo video and submission have not been recorded or posted.
+**B — Team emails and content consent:** [The team enters its own emails and consent in the official form.]
+
+**C — Video/demo:** [Record later. Show the key real action live or in one unedited take, as the rules require.]
+
+**D — Short write-up:** Proof of Done is for teams whose issue trackers stop at a recommendation while the real work continues with people and vendors. We built a private control desk that scopes Fo's outreach, captures quotes and setbacks, asks a person to approve spending, and requires real-world evidence before closing an issue. [Describe the actual verified result here.] Early UI and simulated workflow existed before the event; [team to confirm the exact pre-event scope]. The live Fo connection, run ledger, and final demo path were built during the event. The demo workspace is mocked; [list any other hard-coded parts].
+
+**E — Build note:** The app uses Fo MCP `ask_fo` and `get_fo_reply`, OAuth with PKCE, and GitHub issue APIs. We added per-account task isolation, explicit approval and completion gates, a redacted run trace, recovery actions, and private receipts. An early live run stalled when Fo needed a reply and the app had no reply field; we answered through Wajo's chat, then added an in-task reply form. [Test that new reply path live before claiming it works.]
+
+**F — Run trace:** Export the redacted JSON from the real task. For the current older run, disclose its partial provenance. For a stronger submission, run a fresh task through the updated app and export its exact `ask_fo` and `get_fo_reply` calls. Fo's internal email and phone calls are not exposed by this app; show Wajo's actual action evidence separately if available.
+
+**G — Run count:** Count distinct real tasks sent to Fo; count success only after human-verified completion. Current count: **1 run, 0 verified successes**. Update from the app before submitting.
+
+## X caption draft
+
+“A ticket saying ‘done’ should mean the real-world job was checked. We built Proof of Done on Fo: a bounded request, real outreach, approval before booking, a recovery path, and proof before closure. In this demo Fo [insert actual action]; the task remains open until [insert real verification].”
+
+Attach the unedited demo video to the quote-repost of the founder's launch post. Keep private account details, vendor contact data, and the participant-only access link out of public material.
+
+## Timing and unresolved rule conflict
+
+- **Monday Oct 19, 10:15 AM Pacific / 10:45 PM India:** X quote-repost due. The founder's post is expected at 10:00 AM Pacific.
+- **Tuesday Oct 20:** The newer Discord text says form due at 10:15 AM Pacific; a screenshot says 10:00 AM Pacific. Have every field ready and submit before **10:00 AM Pacific / 10:30 PM India**.
+- The participant messages disagree about whether likes count for only 24 hours or until Friday Oct 23 at noon Pacific. Treat the first 24 hours as critical and keep sharing through the stated Friday close. Verify the rule in the latest Discord announcement before quoting a voting deadline publicly.
+- Hardware reimbursement refers to a rough demo at 5 PM Pacific on Oct 17, now past. A device is optional and should only be included if it has a real working role and the organizers confirm eligibility.

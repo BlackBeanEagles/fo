@@ -1,6 +1,6 @@
 # Proof of Done
 
-An issue tracker for tasks that require action in the physical world. A task moves from request to vendor research, human approval, booking, and verified completion. Fo is the action agent; this app is the private control desk and evidence trail.
+An issue tracker for tasks that require action in the physical world. A task moves from request to vendor research, human approval, booking, and verified completion. Fo is the action agent; this app is the private control desk, definition of done, run ledger, and evidence trail.
 
 ## Run locally
 
@@ -17,11 +17,12 @@ Fo OAuth tokens, app login sessions, and registered Fo clients are held in serve
 
 ## Try the real workflow
 
-1. Use **New task → Poster** for a short task you can actually finish, or open the imported GitHub poster issue. Use **Edit brief** to add your city, print file details, deadline, and true spending limit before sending anything to Fo. These added details stay in your private workspace.
+1. Use **New task → Poster** for a short task you can actually finish, or open the imported GitHub poster issue. Use **Edit brief** to add your city, print file details, deadline, true spending limit, and a measurable **Done when** check before sending anything to Fo. These added details stay in your private workspace.
 2. Click **Ask Fo for quotes**. Review the exact task details and permitted outreach, then authorize it. The app sends a real MCP request in a new Fo conversation and keeps its conversation ID private. The reply appears in the task, labeled **LIVE MCP**. **Check Fo reply** retrieves later results. If Fo asks a question, **Reply to Fo** continues that same conversation; the exact reply is shown before sending.
 3. Record an actual vendor quote, then approve one option. For a setback, mark the task blocked and use **Try another path**, or schedule an explicitly authorized Fo follow-up. Fo may research and contact providers within the shown scope; it may not spend or book during research.
 4. Only after a specific quote is approved, use **Ask Fo to book**. This sends the approved vendor and maximum total. A changed price, deposit, or payment request requires fresh approval.
-5. Record a booking only after obtaining its real confirmation. Mark done only after checking the physical outcome; add a photo or receipt if possible. Photos are served only to the task owner.
+5. Record a booking only after obtaining its real confirmation. Mark done only after a person checks the outcome against **Done when** and attests to that check; add a photo or receipt if possible. Photos are served only to the task owner.
+6. Use **Export run trace** on a real task to get a redacted JSON log of the app's `ask_fo` and `get_fo_reply` calls, responses, and elapsed time. The board counts one run per distinct real task sent to Fo, and a success only when its outcome is human verified. Earlier runs are labeled partial because exact tool telemetry was added later. Fo's internal phone and email tool calls are outside this app's trace.
 
 The **Load demo workspace** and **Simulate next step** paths are labeled simulated and never call Fo. A Fo response, including one with status `complete`, does not automatically mark a task booked or verified.
 
@@ -36,7 +37,7 @@ For status comments, also set `GITHUB_TOKEN` to a fine-grained token with **Issu
 ## Privacy and limits
 
 - Tasks, receipts, evidence photos, and Fo calls are scoped to the signed-in local account. Tests cover cross-account access to task and Fo routes.
-- Booking and spending are gated by a human-selected vendor and quoted amount. The UI shows Fo's permitted action before sending it.
+- Booking and spending are gated by a human-selected vendor and quoted amount. The UI shows Fo's permitted action before sending it. Research prompts set a total three-provider limit, ask Fo to identify itself as an AI assistant, and ask it to respect refusals.
 - Follow-ups can run automatically only when the user explicitly opts in while Fo is connected. They can seek alternatives and quotes but cannot book or spend.
 - Fo tool responses are preserved as reported. Vendor quotes and booking confirmations must be checked before recording them as facts. Completion needs separate evidence. A free-form reply to Fo cannot authorize booking or spending; use the gated booking flow.
 - This is a local hackathon build. Sessions and Fo tokens do not survive restarts; rate limiting, durable encrypted tokens, and production hosting are still needed for a public service.

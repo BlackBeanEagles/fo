@@ -9,6 +9,7 @@ import { foPrompt } from './fo-prompt.mjs';
 import { createDemoWorkspace, demoActionFor } from './demo.mjs';
 import { dueForFollowUp, recordFollowUpDue } from './followups.mjs';
 import { listFoIssues, parseAllowedRepository } from './github-issues.mjs';
+import { recordMcpCall, runStats, exportRunTrace } from './run-trace.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(root, '.data');
@@ -74,14 +75,21 @@ async function checkFollowUps() {
         const task = tasks[index];
         if (task.autoFollowUp && task.mode !== 'demo' && connectionStatus(task.ownerId).connected && !foInFlight.has(task.id)) {
           foInFlight.add(task.id);
+          const startedAt = new Date().toISOString();
+          const prompt = foPrompt(task, 'recover');
           try {
-            const prompt = foPrompt(task, 'recover');
             const reply = await askFo(task.ownerId, prompt, task.fo?.externalId);
             const currentIndex = tasks.findIndex(item => item.id === task.id);
-            if (currentIndex !== -1) tasks[currentIndex] = recordFoExchange(tasks[currentIndex], { intent: 'recover', prompt, reply });
+            if (currentIndex !== -1) {
+              const updated = recordFoExchange(tasks[currentIndex], { intent: 'recover', prompt, reply });
+              tasks[currentIndex] = recordMcpCall(updated, { tool: 'ask_fo', intent: 'recover', message: prompt, reply, startedAt, requestConversationId: task.fo?.externalId });
+            }
           } catch (error) {
             const currentIndex = tasks.findIndex(item => item.id === task.id);
-            if (currentIndex !== -1) tasks[currentIndex] = recordFoFailure(tasks[currentIndex], error.message);
+            if (currentIndex !== -1) {
+              const updated = recordFoFailure(tasks[currentIndex], error.message);
+              tasks[currentIndex] = recordMcpCall(updated, { tool: 'ask_fo', intent: 'recover', message: prompt, error, startedAt, requestConversationId: task.fo?.externalId });
+            }
           } finally { foInFlight.delete(task.id); }
         }
       }
@@ -209,10 +217,18 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { user: user ? { id: user.id, username: user.username } : null });
     }
     const user = currentUser(req);
-    if (req.method === 'GET' && path === '/api/status') return send(res, 200, { mode: 'local-prototype', fo: user ? connectionStatus(user.id) : { connected: false, pending: false, tools: [] }, githubWebhookEnabled: !!process.env.GITHUB_WEBHOOK_SECRET, githubCommentsEnabled: !!process.env.GITHUB_TOKEN && process.env.GITHUB_SYNC_COMMENTS === '1', githubIssueSyncEnabled: !!user && githubOwner()?.owner.id === user.id, githubIssuePollingEnabled: process.env.GITHUB_POLL === '1' && !!githubOwner() });
+    if (req.method === 'GET' && path === '/api/status') return send(res, 200, { mode: 'local-prototype', fo: user ? connectionStatus(user.id) : { connected: false, pending: false, tools: [] }, runs: user ? runStats(tasks.filter(task => task.ownerId === user.id)) : { runs: 0, verified: 0, inProgress: 0 }, githubWebhookEnabled: !!process.env.GITHUB_WEBHOOK_SECRET, githubCommentsEnabled: !!process.env.GITHUB_TOKEN && process.env.GITHUB_SYNC_COMMENTS === '1', githubIssueSyncEnabled: !!user && githubOwner()?.owner.id === user.id, githubIssuePollingEnabled: process.env.GITHUB_POLL === '1' && !!githubOwner() });
     if (req.method === 'GET' && path === '/api/tasks') {
       if (!user) return send(res, 401, { error: 'Sign in to see your tasks.' });
       return send(res, 200, { tasks: tasks.filter(task => task.ownerId === user.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) });
+    }
+    const traceMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/run-trace$/);
+    if (req.method === 'GET' && traceMatch) {
+      if (!user) return send(res, 401, { error: 'Sign in to see your run trace.' });
+      const task = tasks.find(item => item.id === traceMatch[1] && item.ownerId === user.id);
+      if (!task) return send(res, 404, { error: 'Task not found.' });
+      if (task.mode === 'demo' || !(task.events?.some(event => event.kind === 'fo_request' && event.mode === 'live') || task.mcpCalls?.some(call => call.tool === 'ask_fo'))) return send(res, 409, { error: 'This task has no real Fo run yet.' });
+      return send(res, 200, { trace: exportRunTrace(task) });
     }
     const receiptMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/receipt$/);
     if (req.method === 'GET' && receiptMatch) {
@@ -322,12 +338,15 @@ const server = createServer(async (req, res) => {
         if (!connectionStatus(user.id).connected) return send(res, 409, { error: 'Connect your Fo account first.' });
         if (foInFlight.has(id)) return send(res, 409, { error: 'Fo is already working on this task.' });
         foInFlight.add(id);
+        let traceContext = null;
         try {
           const task = tasks[index];
           let updated;
           if (foMatch[2] === 'reply') {
+            traceContext = { tool: 'get_fo_reply', intent: 'check', startedAt: new Date().toISOString() };
             const reply = await getFoReply(user.id, task.fo?.externalId);
             updated = recordFoReply(tasks.find(item => item.id === id), reply);
+            updated = recordMcpCall(updated, { ...traceContext, reply });
           } else {
             const intent = String(json.intent || 'research');
             if (!['research', 'recover', 'book', 'message'].includes(intent) || json.authorized !== true) return send(res, 400, { error: 'Choose and authorize the Fo action.' });
@@ -341,8 +360,10 @@ const server = createServer(async (req, res) => {
             const prompt = intent === 'message'
               ? `${message}\n\nContinue only this task. This free-form reply does not authorize booking, purchase, deposits, or payment. Ask for approval through the task workflow before any such action.`
               : foPrompt(task, intent, selected);
+            traceContext = { tool: 'ask_fo', intent, message: prompt, startedAt: new Date().toISOString(), requestConversationId: task.fo?.externalId };
             const reply = await askFo(user.id, prompt, task.fo?.externalId);
             updated = recordFoExchange(tasks.find(item => item.id === id), { intent, prompt, reply });
+            updated = recordMcpCall(updated, { ...traceContext, reply });
           }
           const currentIndex = tasks.findIndex(item => item.id === id && item.ownerId === user.id);
           if (currentIndex === -1) return send(res, 404, { error: 'Task not found.' });
@@ -350,6 +371,15 @@ const server = createServer(async (req, res) => {
           await save();
           if (foMatch[2] === 'ask' || updated !== task) void syncGitHub(updated);
           return send(res, 200, { task: updated });
+        } catch (error) {
+          if (traceContext) {
+            const currentIndex = tasks.findIndex(item => item.id === id && item.ownerId === user.id);
+            if (currentIndex !== -1) {
+              tasks[currentIndex] = recordMcpCall(tasks[currentIndex], { ...traceContext, error });
+              await save();
+            }
+          }
+          throw error;
         } finally { foInFlight.delete(id); }
       }
       const match = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/(action|demo-next)$/);
@@ -358,6 +388,7 @@ const server = createServer(async (req, res) => {
         if (index === -1) return send(res, 404, { error: 'Task not found.' });
         let action = { ...json, actor: user.username, mode: tasks[index].mode === 'demo' ? 'demo' : 'manual' };
         if (match[2] === 'demo-next') {
+          if (tasks[index].mode !== 'demo') return send(res, 409, { error: 'Simulation is available only for demo scenarios.' });
           action = demoActionFor(tasks[index]);
           if (!action) return send(res, 400, { error: 'Approve an option or verify the outcome to continue.' });
         }

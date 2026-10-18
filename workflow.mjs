@@ -9,7 +9,7 @@ export function createTask(input, source = { type: 'app' }) {
   const category = ['repair', 'event', 'purchase', 'other'].includes(input.category) ? input.category : 'other';
   const priority = ['normal', 'urgent'].includes(input.priority) ? input.priority : 'normal';
   return {
-    id: randomUUID(), title, description: clean(input.description, 2000),
+    id: randomUUID(), title, description: clean(input.description, 2000), doneWhen: clean(input.doneWhen, 400),
     category, priority,
     budget: input.budget === '' || input.budget == null ? null : parseMoney(input.budget),
     deadline: clean(input.deadline, 40) || null, source,
@@ -35,6 +35,7 @@ export function applyAction(task, action) {
       if (!title) throw new Error('A task title is required.');
       next.title = title;
       next.description = clean(action.description, 2000);
+      next.doneWhen = clean(action.doneWhen, 400);
       next.category = ['repair', 'event', 'purchase', 'other'].includes(action.category) ? action.category : task.category;
       next.priority = ['normal', 'urgent'].includes(action.priority) ? action.priority : task.priority;
       next.budget = action.budget === '' || action.budget == null ? null : parseMoney(action.budget);
@@ -80,7 +81,8 @@ export function applyAction(task, action) {
     case 'complete':
       requireStatus(task, ['booked']);
       if (!clean(action.evidence, 1000)) throw new Error('Completion evidence is required.');
-      next.receipt = { evidence: clean(action.evidence, 1000), completedBy: actor, at: now };
+      if (task.mode !== 'demo' && action.verified !== true) throw new Error('Confirm that a person checked the real outcome before closing this task.');
+      next.receipt = { evidence: clean(action.evidence, 1000), completedBy: actor, verifiedByHuman: task.mode !== 'demo', at: now };
       next.status = 'completed';
       text = `Outcome verified by ${actor}: ${next.receipt.evidence}`;
       break;

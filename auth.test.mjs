@@ -23,8 +23,12 @@ test('accounts only access their own tasks and receipts', async () => {
   const child = spawn(process.execPath, ['server.mjs'], {
     cwd: import.meta.dirname,
     env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, GITHUB_WEBHOOK_SECRET: 'local-test-secret', GITHUB_ALLOWED_REPOSITORY: 'BlackBeanEagles/fo', GITHUB_TASK_OWNER: 'alice' },
-    stdio: 'ignore'
+    stdio: ['ignore', 'pipe', 'pipe']
   });
+  let serverError = '';
+  let serverOutput = '';
+  child.stderr.on('data', chunk => { serverError += chunk.toString().slice(0, 2000); });
+  child.stdout.on('data', chunk => { serverOutput += chunk.toString().slice(0, 2000); });
   async function request(path, options = {}, cookie = '') {
     const response = await fetch(base + path, { ...options, headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...options.headers } });
     return { status: response.status, body: await response.json(), cookie: response.headers.get('set-cookie')?.split(';')[0] };
@@ -35,7 +39,7 @@ test('accounts only access their own tasks and receipts', async () => {
       try { await request('/api/auth/session'); ready = true; break; }
       catch { await new Promise(resolve => setTimeout(resolve, 100)); }
     }
-    assert.ok(ready, 'server started');
+    assert.ok(ready, `server started (exit=${child.exitCode}, output=${serverOutput}, error=${serverError})`);
     const registration = name => request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username: name, password: 'a strong password 123' }) });
     const alice = await registration('alice');
     const bob = await registration('bob');
@@ -49,8 +53,11 @@ test('accounts only access their own tasks and receipts', async () => {
     assert.equal((await request('/api/tasks')).status, 401);
     assert.equal((await request(`/api/tasks/${id}`, {}, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/receipt`, {}, bob.cookie)).status, 404);
+    assert.equal((await request(`/api/tasks/${id}/run-trace`, {}, bob.cookie)).status, 404);
+    assert.equal((await request(`/api/tasks/${id}/run-trace`, {}, alice.cookie)).status, 409);
     assert.equal((await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'start' }) }, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/demo-next`, { method: 'POST', body: '{}' }, bob.cookie)).status, 404);
+    assert.equal((await request(`/api/tasks/${id}/demo-next`, { method: 'POST', body: '{}' }, alice.cookie)).status, 409);
     assert.equal((await request(`/api/tasks/${id}/fo/ask`, { method: 'POST', body: JSON.stringify({ intent: 'research', authorized: true }) }, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/fo/reply`, { method: 'POST', body: '{}' }, bob.cookie)).status, 404);
     assert.equal((await request('/api/status', {}, alice.cookie)).body.fo.connected, false);
@@ -63,7 +70,7 @@ test('accounts only access their own tasks and receipts', async () => {
     await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'approve', optionId }) }, alice.cookie);
     await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'book', confirmation: 'Confirmed for pickup' }) }, alice.cookie);
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/8QAAAABJRU5ErkJggg==';
-    assert.equal((await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'complete', evidence: 'Picked up and photographed', photoData: `data:image/png;base64,${png}` }) }, alice.cookie)).status, 200);
+    assert.equal((await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'complete', evidence: 'Picked up and photographed', verified: true, photoData: `data:image/png;base64,${png}` }) }, alice.cookie)).status, 200);
     assert.equal((await request(`/api/tasks/${id}/evidence`, {}, bob.cookie)).status, 404);
     const privateEvidence = await fetch(`${base}/api/tasks/${id}/evidence`, { headers: { Cookie: alice.cookie } });
     assert.equal(privateEvidence.status, 200);

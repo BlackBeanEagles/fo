@@ -1,13 +1,13 @@
 const $ = selector => document.querySelector(selector);
-const state = { tasks: [], selectedId: null, filter: 'all', search: '', action: null, foIntent: null, user: null, authMode: 'register', foConnected: false };
+const state = { tasks: [], selectedId: null, filter: 'all', search: '', action: null, foIntent: null, user: null, authMode: 'register', foConnected: false, runs: { runs: 0, verified: 0, inProgress: 0 } };
 const statusNames = { new: 'New', working: 'In progress', awaiting_approval: 'Needs approval', approved: 'Approved', booked: 'Booked', completed: 'Verified done', blocked: 'Blocked', cancelled: 'Cancelled' };
 const categoryNames = { repair: 'Repair', event: 'Event', purchase: 'Purchase', other: 'Task' };
 const categoryIcons = { repair: '🔧', event: '🥗', purchase: '🛒', other: '✳' };
 const templates = {
-  poster: { title: 'Print and collect a hackathon poster', description: 'Find a nearby print shop that can print one color A3 poster today. Ask for a quote and pickup time. Do not order until I approve. I will verify with a photo or receipt after pickup. Add my city and print file details before sending.', budget: 40, category: 'other' },
-  repair: { title: 'Get the office projector repaired', description: 'Find someone available this week. Ask before booking. Confirm the projector works before closing.', budget: 180 },
-  event: { title: 'Arrange team lunch for 12', description: 'Collect dietary needs, compare catering options, and deliver by noon. Ask before ordering.', budget: 250 },
-  purchase: { title: 'Restock the office fridge', description: 'Water, sparkling drinks, fruit, and snacks. Ask before purchase; confirm delivery.', budget: 90 }
+  poster: { title: 'Print and collect a hackathon poster', description: 'Find a nearby print shop that can print one color A3 poster today. Ask for a quote and pickup time. Do not order until I approve. Add my city and print file details before sending.', doneWhen: 'A person has the printed poster and records a photo or receipt.', budget: 40, category: 'other' },
+  repair: { title: 'Get the office projector repaired', description: 'Find someone available this week. Ask before booking.', doneWhen: 'A teammate tests the projector and confirms it displays correctly.', budget: 180 },
+  event: { title: 'Arrange team lunch for 12', description: 'Collect dietary needs, compare catering options, and deliver by noon. Ask before ordering.', doneWhen: 'The lunch arrives for all 12 people and the order receipt is saved.', budget: 250 },
+  purchase: { title: 'Restock the office fridge', description: 'Water, sparkling drinks, fruit, and snacks. Ask before purchase.', doneWhen: 'The requested items arrive and someone checks the delivery against the order.', budget: 90 }
 };
 
 async function api(path, options = {}) {
@@ -59,6 +59,7 @@ async function refresh() {
   if (!state.user || state.user.id !== accountId) return;
   state.tasks = tasks;
   state.foConnected = !!status.fo?.connected;
+  state.runs = status.runs || { runs: 0, verified: 0, inProgress: 0 };
     $('#syncGitHub').hidden = !status.githubIssueSyncEnabled;
   renderFoConnection();
   if (!tasks.some(t => t.id === state.selectedId)) state.selectedId = tasks[0]?.id || null;
@@ -72,7 +73,7 @@ function renderFoConnection() {
   $('#connectFoInline').hidden = state.foConnected;
   $('#disconnectFoInline').hidden = !state.foConnected;
   $('#foInlineStatus').textContent = state.foConnected ? 'Fo connected · live actions ready' : 'Fo is not connected · demo steps are simulated';
-  $('#modeDisclosure').innerHTML = state.foConnected ? '<strong>Live connection:</strong> Fo replies are marked live. Sample scenarios remain simulated. Booking and completion still require proof.' : '<strong>Local mode:</strong> Connect Fo to make real requests. Sample scenarios remain simulated.';
+  $('#modeDisclosure').innerHTML = state.foConnected ? `<strong>Live connection:</strong> ${state.runs.runs} real Fo run${state.runs.runs === 1 ? '' : 's'} · ${state.runs.verified} verified outcome${state.runs.verified === 1 ? '' : 's'}. Booking and completion still require proof.` : '<strong>Local mode:</strong> Connect Fo to make real requests. Sample scenarios remain simulated.';
 }
 function setFilter(filter) {
   state.filter = filter;
@@ -87,7 +88,7 @@ function render() {
   $('#openCount').textContent = tasks.filter(t => !['completed', 'cancelled'].includes(t.status)).length;
   $('#approvalCount').textContent = approval.length;
   $('#attentionCount').textContent = attention.length;
-  $('#doneCount').textContent = tasks.filter(t => t.status === 'completed').length;
+  $('#doneCount').textContent = tasks.filter(t => t.mode !== 'demo' && t.status === 'completed' && t.receipt?.verifiedByHuman === true).length;
   $('#sideApprovalCount').textContent = approval.length;
   $('#sideAttentionCount').textContent = attention.length;
   $('#taskCount').textContent = tasks.length;
@@ -149,9 +150,11 @@ function renderDetail(task) {
     }
   }
   if (!['completed', 'cancelled'].includes(task.status)) actions.push('<button type="button" class="quiet" data-copy-brief>Copy Fo brief</button>');
-  if (['new', 'working', 'approved'].includes(task.status)) actions.push('<button type="button" class="quiet" data-demo>▶ Simulate next step</button>');
+  if (task.mode === 'demo' && ['new', 'working', 'approved'].includes(task.status)) actions.push('<button type="button" class="quiet" data-demo>▶ Simulate next step</button>');
   if (!['completed', 'cancelled'].includes(task.status)) actions.push(actionButton('cancel', 'Cancel', 'quiet'));
   if (task.status === 'completed') actions.push('<button type="button" class="secondary" data-download-receipt>↓ Export receipt</button>');
+  const hasRealRun = task.mode !== 'demo' && ((task.events || []).some(event => event.kind === 'fo_request' && event.mode === 'live') || task.mcpCalls?.some(call => call.tool === 'ask_fo'));
+  if (hasRealRun) actions.push('<button type="button" class="secondary" data-download-trace>↓ Export run trace</button>');
   const lowestPrice = task.options.length ? Math.min(...task.options.map(option => option.price)) : null;
   const options = task.options.length ? [...task.options].sort((a, b) => a.price - b.price).map(o => {
     const budgetLabel = task.budget == null ? '' : o.price <= task.budget ? '<span class="quote-tag in-budget">Within budget</span>' : '<span class="quote-tag over-budget">Over budget</span>';
@@ -161,6 +164,18 @@ function renderDetail(task) {
   const timeline = [...task.events].reverse().map(e => `<li><div class="timeline-dot"></div><div><p>${esc(e.text)} ${e.mode === 'demo' ? '<span class="demo-chip">SIMULATED</span>' : ''}</p><small>${e.channel ? `<span class="channel-chip ${esc(e.channel)}">${esc(e.channel.toUpperCase())}</span> ` : ''}${esc(e.actor)} · ${niceDate(e.at)}</small></div></li>`).join('');
   const foPanel = task.fo?.lastResponse ? `<div class="fo-result"><div class="fo-result-top"><strong>Fo’s latest reply</strong><span>LIVE MCP · ${esc(task.fo.status)}</span></div><p>${esc(task.fo.lastResponse)}</p><small>Updated ${niceDate(task.fo.lastSyncedAt)}</small><div class="fo-result-note">Fo’s report is evidence of progress. Verify quotes, booking confirmations, and physical completion separately.</div></div>` : '';
   panel.innerHTML = `<div class="detail-inner"><div class="detail-header"><div class="eyebrow">TASK ${esc(task.id.slice(0, 8).toUpperCase())} ${task.mode === 'demo' ? '· SIMULATED SCENARIO' : ''}</div><div class="detail-heading"><div><div class="detail-category">${categoryIcons[task.category] || '✳'} ${esc(categoryNames[task.category] || 'Task')}</div><h2>${esc(task.title)}</h2></div><span class="status ${esc(task.status)}">${statusName(task.status)}</span></div><p>${esc(task.description || 'No details provided.')}</p></div>${stageMarkup(task)}${foPanel}${task.status === 'blocked' ? '<div class="state-banner blocked">This task is blocked. Review the activity and start a new path.</div>' : ''}${isDue(task) ? '<div class="state-banner due">Follow-up is due. Record the response or ask Fo to check back.</div>' : ''}<div class="fact-row"><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>DEADLINE</small><strong>${esc(task.deadline || 'Not set')}</strong></div><div><small>PRIORITY</small><strong>${task.priority === 'urgent' ? 'Urgent' : 'Normal'}</strong></div><div><small>SOURCE</small><strong>${task.source?.type === 'github' ? 'GitHub #' + esc(task.source.issue) : task.source?.type === 'demo' ? 'Demo scenario' : 'Direct request'}</strong></div></div><div class="detail-section"><div class="detail-section-head"><h3>Next move</h3><small>${task.nextFollowUp ? 'Follow up ' + niceDate(task.nextFollowUp) : 'Stay in control'}</small></div><div class="action-bar">${actions.join('') || '<span class="subtle-empty">No further action required.</span>'}</div></div><div class="detail-section"><div class="detail-section-head"><h3>Options</h3><small>${task.options.length} found</small></div>${options}</div>${task.booking ? `<div class="detail-section"><div class="detail-section-head"><h3>Booking</h3><small>${niceDate(task.booking.at)}</small></div><div class="receipt booking"><span>◇</span><div><strong>${task.status === 'completed' ? 'Booking confirmed' : 'Booked · outcome pending'}</strong><p>${esc(task.booking.confirmation)}</p></div></div></div>` : ''}${task.receipt ? `<div class="detail-section"><div class="detail-section-head"><h3>Proof of done</h3><small>${niceDate(task.receipt.at)}</small></div><div class="receipt complete"><span>✓</span><div><strong>Verified by ${esc(task.receipt.completedBy)}</strong><p>${esc(task.receipt.evidence)}</p></div></div>${task.receipt.photoFile ? `<img class="proof-photo" src="/api/tasks/${esc(task.id)}/evidence" alt="Private photo evidence for this task">` : ''}</div>` : ''}<div class="detail-section"><div class="detail-section-head"><h3>Every step, on record</h3><small>${task.events.length} events</small></div><ul class="timeline">${timeline}</ul></div></div>`;
+  const contract = document.createElement('div');
+  contract.className = 'fo-result outcome-contract';
+  contract.innerHTML = `<div class="fo-result-top"><strong>Definition of done</strong><span>${task.doneWhen ? 'OWNER SET' : 'NEEDS DEFINITION'}</span></div><p>${esc(task.doneWhen || 'Add a concrete success check in Edit brief before closing this issue.')}</p><div class="fo-result-note">A Fo status of complete means its request finished. The issue closes only after a person verifies the outcome and records evidence.</div>`;
+  panel.querySelector('.fact-row').before(contract);
+  if (hasRealRun) {
+    const runPanel = document.createElement('div');
+    runPanel.className = 'fo-result run-ledger';
+    const callLabel = task.mcpCalls?.length ? `${task.mcpCalls.length} app MCP call${task.mcpCalls.length === 1 ? '' : 's'} logged` : 'Earlier run · partial trace';
+    const outcome = task.status === 'completed' && task.receipt?.evidence && task.receipt?.verifiedByHuman === true ? 'Human verified' : 'Outcome still open';
+    runPanel.innerHTML = `<div class="fo-result-top"><strong>Run ledger</strong><span>${esc(outcome)}</span></div><p>${esc(callLabel)}. Export the redacted trace for tool calls and limitations.</p><div class="fo-result-note">Fo’s internal phone and email calls are not exposed here. Only claim outcomes backed by a vendor reply or human proof.</div>`;
+    panel.querySelector('.fact-row').before(runPanel);
+  }
 }
 
 function renderConversations(task) {
@@ -200,16 +215,19 @@ function openAction(type, optionId) {
   $('#actionFields').innerHTML = fields;
   if (type === 'edit') {
     const form = $('#actionForm');
+    form.elements.description.closest('label').insertAdjacentHTML('afterend', '<label>Done when <textarea name="doneWhen" rows="2" maxlength="400" placeholder="The real-world result a person will check before closing this task"></textarea></label>');
     for (const key of ['title', 'description', 'category', 'priority']) form.elements[key].value = task[key] || '';
+    form.elements.doneWhen.value = task.doneWhen || '';
     form.elements.budget.value = task.budget ?? '';
     form.elements.deadline.value = task.deadline?.slice(0, 10) || '';
   }
+  if (type === 'complete' && task.mode !== 'demo') $('#actionFields').insertAdjacentHTML('beforeend', '<label class="check"><input name="verified" type="checkbox" required> I personally checked the real-world outcome against the definition of done.</label>');
   if (type === 'schedule_followup' && state.foConnected && task.mode !== 'demo') $('#actionFields').insertAdjacentHTML('beforeend', '<label class="check"><input name="autoFollowUp" type="checkbox"> Let Fo check for an alternative when due. Fo may contact up to three providers for quotes; no booking or spending.</label>');
   if (type === 'approve') $('#actionFields').innerHTML = `<p class="approval-intro">Choose the quote you authorize. Booking still needs a confirmed result.</p><div class="approval-choices">${[...task.options].sort((a, b) => a.price - b.price).map((o, index) => `<label class="approval-choice"><input type="radio" name="optionId" value="${esc(o.id)}" ${o.id === (optionId || task.options[0]?.id) ? 'checked' : ''} required><span><strong>${esc(o.vendor)}</strong><small>${esc(o.availability || 'Timing not recorded')}${task.budget != null && o.price > task.budget ? ' · OVER BUDGET' : ''}</small></span><b>${money(o.price)}</b></label>`).join('')}</div>${task.budget != null && task.options.some(o => o.price > task.budget) ? '<label class="check budget-override"><input name="overrideBudget" type="checkbox"> I approve going over budget if that quote is chosen</label>' : ''}`;
   $('#actionDialog').showModal();
 }
 function foBrief(task) {
-  return `Please handle this task and report progress, options, and confirmation details. Do not book, purchase, or spend without my approval.\n\nTask: ${task.title}\nDetails: ${task.description || 'None provided'}\nBudget: ${money(task.budget)}\nDeadline: ${task.deadline || 'Not set'}\nCurrent status: ${statusName(task.status)}\nLatest activity: ${task.events.at(-1)?.text || 'None'}\n\nIf an option exceeds the budget or the outcome cannot be verified, ask me before proceeding.`;
+  return `Please handle this task and report progress, options, and confirmation details. Do not book, purchase, or spend without my approval.\n\nTask: ${task.title}\nDetails: ${task.description || 'None provided'}\nDone when: ${task.doneWhen || 'Ask me to define a success check'}\nBudget: ${money(task.budget)}\nDeadline: ${task.deadline || 'Not set'}\nCurrent status: ${statusName(task.status)}\nLatest activity: ${task.events.at(-1)?.text || 'None'}\n\nIf an option exceeds the budget or the outcome cannot be verified, ask me before proceeding.`;
 }
 async function seedDemo() {
   try {
@@ -229,10 +247,10 @@ function openFoAction(intent) {
     ? `Fo may arrange only ${chosen?.vendor || 'the approved vendor'} at up to ${money(chosen?.price)}. No deposit or card details. Any change needs new approval.`
     : intent === 'message'
       ? 'Your exact reply goes to this task’s existing Fo conversation. This reply cannot authorize booking, purchase, or payment; use the approved booking flow for that.'
-      : 'Fo may contact up to three relevant providers for quotes and availability. Fo may not book, buy, or spend.';
+      : 'Fo may contact up to three distinct providers total for this task for quotes and availability. It should identify itself as an AI assistant, respect refusals, and avoid repeated unsolicited follow-ups. Fo may not book, buy, or spend.';
   $('#foActionSummary').innerHTML = intent === 'message'
     ? `<div><small>TASK</small><strong>${esc(task.title)}</strong></div><div><small>FO’S LATEST REPLY</small><p>${esc(task.fo?.lastResponse || 'No reply yet.')}</p></div><label>Your reply to Fo<textarea name="message" rows="4" maxlength="2000" required placeholder="Answer Fo’s question or ask for a precise update"></textarea></label><div><small>PERMITTED ACTION</small><p>${esc(scope)}</p></div>`
-    : `<div><small>TASK</small><strong>${esc(task.title)}</strong></div><div><small>DETAILS SHARED WITH FO</small><p>${esc(task.description || 'No details added')}</p></div><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>PERMITTED ACTION</small><p>${esc(scope)}</p></div>`;
+    : `<div><small>TASK</small><strong>${esc(task.title)}</strong></div><div><small>DETAILS SHARED WITH FO</small><p>${esc(task.description || 'No details added')}</p></div><div><small>DONE WHEN</small><p>${esc(task.doneWhen || 'Not defined yet')}</p></div><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>PERMITTED ACTION</small><p>${esc(scope)}</p></div>`;
   $('#foActionForm').reset();
   $('#foActionSubmit').textContent = intent === 'message' ? 'Send reply to Fo ↗' : 'Send to Fo ↗';
   $('#foActionDialog').showModal();
@@ -248,6 +266,7 @@ document.addEventListener('click', async event => {
   if (template) {
     const key = template.dataset.template, form = $('#taskForm'), preset = templates[key];
     form.elements.title.value = preset.title; form.elements.description.value = preset.description;
+    form.elements.doneWhen.value = preset.doneWhen || '';
     form.elements.category.value = preset.category || key; form.elements.budget.value = preset.budget;
     document.querySelectorAll('[data-template]').forEach(button => button.classList.toggle('selected', button === template));
     return;
@@ -292,6 +311,17 @@ document.addEventListener('click', async event => {
     } catch (error) { toast(error.message, true); }
     return;
   }
+  if (event.target.closest('[data-download-trace]')) {
+    try {
+      const { trace } = await api(`/api/tasks/${state.selectedId}/run-trace`);
+      const blob = new Blob([JSON.stringify(trace, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = `fo-run-trace-${state.selectedId.slice(0, 8)}.json`;
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast('Redacted run trace exported.');
+    } catch (error) { toast(error.message, true); }
+    return;
+  }
   if (event.target.closest('[data-demo]')) {
     if (!confirm('Run one simulated Fo step? No one will be contacted and no money spent.')) return;
     try { await api(`/api/tasks/${state.selectedId}/demo-next`, { method: 'POST', body: '{}' }); await refresh(); toast('Simulated step recorded.'); }
@@ -333,6 +363,7 @@ $('#foActionForm').addEventListener('submit', async event => {
   finally { button.disabled = false; button.textContent = state.foIntent === 'message' ? 'Send reply to Fo ↗' : 'Send to Fo ↗'; }
 });
 $('#taskSearch').addEventListener('input', event => { state.search = event.target.value.trim().toLowerCase(); render(); });
+$('#taskForm').elements.description.closest('label').insertAdjacentHTML('afterend', '<label>Done when <textarea name="doneWhen" rows="2" maxlength="400" placeholder="A specific result you can verify in the real world"></textarea></label>');
 $('#taskForm').addEventListener('submit', async event => {
   event.preventDefault();
   try {
@@ -346,6 +377,7 @@ $('#actionForm').addEventListener('submit', async event => {
   event.preventDefault();
   const form = new FormData(event.target), values = Object.fromEntries(form);
   if (state.action === 'approve') values.overrideBudget = form.has('overrideBudget');
+  if (state.action === 'complete') values.verified = form.has('verified');
   if (state.action === 'schedule_followup') values.autoFollowUp = form.has('autoFollowUp');
   if (values.nextFollowUp) values.nextFollowUp = new Date(values.nextFollowUp).toISOString();
   const task = state.tasks.find(t => t.id === state.selectedId);

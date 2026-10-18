@@ -45,7 +45,7 @@ test('accounts only access their own tasks and receipts', async () => {
     const bob = await registration('bob');
     assert.equal(alice.status, 201);
     assert.equal(bob.status, 201);
-    const created = await request('/api/tasks', { method: 'POST', body: JSON.stringify({ title: 'Repair private office projector' }) }, alice.cookie);
+    const created = await request('/api/tasks', { method: 'POST', body: JSON.stringify({ title: 'Repair private office projector', doneWhen: 'A teammate tests the repaired projector.' }) }, alice.cookie);
     assert.equal(created.status, 201);
     const id = created.body.task.id;
     assert.equal((await request('/api/tasks', {}, alice.cookie)).body.tasks.length, 1);
@@ -54,6 +54,7 @@ test('accounts only access their own tasks and receipts', async () => {
     assert.equal((await request(`/api/tasks/${id}`, {}, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/receipt`, {}, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/run-trace`, {}, bob.cookie)).status, 404);
+    assert.equal((await request(`/api/tasks/${id}/proof-packet`, {}, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/run-trace`, {}, alice.cookie)).status, 409);
     assert.equal((await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'start' }) }, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/demo-next`, { method: 'POST', body: '{}' }, bob.cookie)).status, 404);

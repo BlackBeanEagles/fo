@@ -11,6 +11,7 @@ import { createDemoWorkspace, demoActionFor } from './demo.mjs';
 import { dueForFollowUp, recordFollowUpDue } from './followups.mjs';
 import { listFoIssues, parseAllowedRepository } from './github-issues.mjs';
 import { recordMcpCall, runStats, exportRunTrace } from './run-trace.mjs';
+import { exportProofPacket } from './proof-packet.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(root, '.data');
@@ -266,6 +267,14 @@ const server = createServer(async (req, res) => {
       if (task.mode === 'demo' || !(task.events?.some(event => event.kind === 'fo_request' && event.mode === 'live') || task.mcpCalls?.some(call => call.tool === 'ask_fo'))) return send(res, 409, { error: 'This task has no real Fo run yet.' });
       return send(res, 200, { trace: exportRunTrace(task) });
     }
+    const packetMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/proof-packet$/);
+    if (req.method === 'GET' && packetMatch) {
+      if (!user) return send(res, 401, { error: 'Sign in to see your proof packet.' });
+      const task = tasks.find(item => item.id === packetMatch[1] && item.ownerId === user.id);
+      if (!task) return send(res, 404, { error: 'Task not found.' });
+      if (task.mode === 'demo' || !(task.events?.some(event => event.kind === 'fo_request' && event.mode === 'live') || task.mcpCalls?.some(call => call.tool === 'ask_fo'))) return send(res, 409, { error: 'This task has no real Fo run yet.' });
+      return send(res, 200, { packet: exportProofPacket(task) });
+    }
     const receiptMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/receipt$/);
     if (req.method === 'GET' && receiptMatch) {
       if (!user) return send(res, 401, { error: 'Sign in to see your receipt.' });
@@ -389,6 +398,7 @@ const server = createServer(async (req, res) => {
             const intent = String(json.intent || 'research');
             if (!['research', 'recover', 'book', 'message'].includes(intent) || json.authorized !== true) return send(res, 400, { error: 'Choose and authorize the Fo action.' });
             if (task.mode === 'demo' || ['completed', 'cancelled'].includes(task.status)) return send(res, 409, { error: 'Fo needs an open real task.' });
+            if (!task.fo?.externalId && !task.doneWhen?.trim()) return send(res, 400, { error: 'Define a measurable Done when outcome before sending a new task to Fo.' });
             if (task.fo?.status === 'working' && intent !== 'message') return send(res, 409, { error: 'Fo is still working. Check the existing reply before sending another request.' });
             const selected = task.options.find(item => item.id === task.approvedOptionId);
             if (intent === 'book' && (task.status !== 'approved' || !selected)) return send(res, 409, { error: 'Approve a specific option before asking Fo to book.' });

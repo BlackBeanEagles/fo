@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createTask, applyAction } from './workflow.mjs';
 
 test('a booking is not treated as completed without human evidence', () => {
-  let task = createTask({ title: 'Repair projector', budget: 150 });
+  let task = createTask({ title: 'Repair projector', doneWhen: 'A teammate tests the repaired projector.', budget: 150 });
   task = applyAction(task, { type: 'start' });
   task = applyAction(task, { type: 'add_option', vendor: 'Repair Co', price: 120 });
   task = applyAction(task, { type: 'approve', optionId: task.options[0].id, actor: 'Owner' });

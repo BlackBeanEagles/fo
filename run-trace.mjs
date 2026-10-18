@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 const supportedTools = new Set(['ask_fo', 'get_fo_reply']);
 
-function redact(value) {
+export function redact(value) {
   return String(value ?? '')
     .replace(/https?:\/\/\S+/gi, '[url]')
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
@@ -58,7 +58,7 @@ export function exportRunTrace(task) {
   const calls = [...historical, ...exact];
   return {
     format: 'proof-of-done-run-trace-v1',
-    task: { id: task.id, title: task.title, status: task.status, mode: task.mode },
+    task: { id: task.id, title: redact(task.title), status: task.status, mode: task.mode },
     outcome: task.status === 'completed' && task.receipt?.evidence && task.receipt?.verifiedByHuman === true ? 'human verified' : 'not verified',
     calls,
     limitations: legacyCalls

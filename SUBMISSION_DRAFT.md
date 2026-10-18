@@ -12,7 +12,7 @@
 
 - One real poster task has been sent to Fo. Fo reported sending two quote-request emails and scheduling a follow-up. The app has no vendor quote, booking, print-ready file, pickup, or completion proof yet. This is **one started real task, zero human-verified completions**.
 - The first run predates exact MCP-call telemetry. Its export contains the saved Fo request and responses but labels later tool names as unattributed. The approval sent in Wajo's own chat is outside the app trace. A new run through the updated app is needed for a complete app-to-Fo trace.
-- The demo workspace and “Simulate next step” remain simulated. Never present those cards as live Fo outcomes.
+- The demo workspace and “Simulate next step” remain simulated. Never present those cards as live Fo outcomes. The new `fo_showcase` account is empty until a fresh real task is created and sent.
 - GitHub issue [#1](https://github.com/BlackBeanEagles/fo/issues/1) has been imported into the owner workspace by live polling. It has not yet started a Fo run or received an issue status update, so the full issue-to-Fo-to-issue loop remains unverified.
 
 ## Form fields to prepare
@@ -27,7 +27,7 @@
 
 **E — Build note:** The app uses Fo MCP `ask_fo` and `get_fo_reply`, OAuth with PKCE, and GitHub issue APIs. We added per-account task isolation, explicit approval and completion gates, a redacted run trace, recovery actions, and private receipts. An early live run stalled when Fo needed a reply and the app had no reply field; we answered through Wajo's chat, then added an in-task reply form. [Test that new reply path live before claiming it works.]
 
-**F — Run trace:** Export the redacted JSON from the real task. For the current older run, disclose its partial provenance. For a stronger submission, run a fresh task through the updated app and export its exact `ask_fo` and `get_fo_reply` calls. Fo's internal email and phone calls are not exposed by this app; show Wajo's actual action evidence separately if available.
+**F — Run trace:** Export the redacted JSON from the real task and its proof packet. For the current older run, disclose its partial provenance. For a stronger submission, run a fresh task through the updated app and export its exact `ask_fo` and `get_fo_reply` calls. Fo's internal email and phone calls are not exposed by this app; show Wajo's actual action evidence separately if available. Owner-entered provider notes are labeled as logs, not authenticated records.
 
 **G — Run count:** Count distinct real tasks sent to Fo; count success only after human-verified completion. Current count: **1 run, 0 verified successes**. Update from the app before submitting.
 

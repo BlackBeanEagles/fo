@@ -79,7 +79,8 @@ export function applyAction(task, action) {
       text = `Booking recorded: ${next.booking.confirmation}`;
       break;
     case 'complete':
-      requireStatus(task, ['booked']);
+      requireStatus(task, ['working', 'awaiting_approval', 'approved', 'booked']);
+      if (task.mode !== 'demo' && !clean(task.doneWhen, 400)) throw new Error('Define the real-world outcome before verifying this task.');
       if (!clean(action.evidence, 1000)) throw new Error('Completion evidence is required.');
       if (task.mode !== 'demo' && action.verified !== true) throw new Error('Confirm that a person checked the real outcome before closing this task.');
       next.receipt = { evidence: clean(action.evidence, 1000), completedBy: actor, verifiedByHuman: task.mode !== 'demo', at: now };

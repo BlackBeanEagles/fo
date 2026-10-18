@@ -25,7 +25,7 @@ test('run trace records exact app MCP calls and redacts contact details', () => 
 });
 
 test('legacy runs are labeled partial and failed attempts count without false success', () => {
-  const task = createTask({ title: 'Get a quote' });
+  const task = createTask({ title: 'Get a quote', doneWhen: 'A person verifies the print quote.' });
   const legacy = recordFoExchange(task, { intent: 'research', prompt: 'Find a quote', reply: { status: 'working', text: 'Still working', conversationId: 'abc' } });
   assert.match(exportRunTrace(legacy).limitations[0], /predates exact MCP call logging/);
   const continued = recordMcpCall(legacy, { tool: 'get_fo_reply', intent: 'check', reply: { status: 'complete', text: 'Quote arrived', conversationId: 'abc' }, startedAt: '2026-10-19T15:00:00.000Z' });

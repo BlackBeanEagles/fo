@@ -4,6 +4,7 @@ const statusNames = { new: 'New', working: 'In progress', awaiting_approval: 'Ne
 const categoryNames = { repair: 'Repair', event: 'Event', purchase: 'Purchase', other: 'Task' };
 const categoryIcons = { repair: '🔧', event: '🥗', purchase: '🛒', other: '✳' };
 const templates = {
+  quote: { title: 'Get one verified print quote', description: 'Ask relevant print shops for the itemized total, tax, pickup location, and earliest pickup time for one A3 color poster. Add the real city and deadline before sending. Request quotes only; do not order or pay.', doneWhen: 'A real shop sends an itemized quote and pickup time, and I check the reply.', budget: 40, category: 'other' },
   poster: { title: 'Print and collect a hackathon poster', description: 'Find a nearby print shop that can print one color A3 poster today. Ask for a quote and pickup time. Do not order until I approve. Add my city and print file details before sending.', doneWhen: 'A person has the printed poster and records a photo or receipt.', budget: 40, category: 'other' },
   repair: { title: 'Get the office projector repaired', description: 'Find someone available this week. Ask before booking.', doneWhen: 'A teammate tests the projector and confirms it displays correctly.', budget: 180 },
   event: { title: 'Arrange team lunch for 12', description: 'Collect dietary needs, compare catering options, and deliver by noon. Ask before ordering.', doneWhen: 'The lunch arrives for all 12 people and the order receipt is saved.', budget: 250 },
@@ -67,7 +68,7 @@ async function refresh() {
 }
 function renderFoConnection() {
   $('#foConnectionTitle').textContent = state.foConnected ? 'Fo is connected' : 'Connect your Fo account';
-  $('#foConnectionText').textContent = state.foConnected ? 'Live Fo requests are available for your real tasks. Your connection is private to this workspace and lasts until this server restarts.' : 'Authorize your Wajo account to send a real task through Fo MCP.';
+  $('#foConnectionText').textContent = state.foConnected ? 'Live Fo requests are ready. This workspace connection is encrypted locally and unlocks when you sign in after a restart.' : 'Authorize your Wajo account to send a real task through Fo MCP.';
   $('#connectFo').hidden = state.foConnected;
   $('#disconnectFo').hidden = !state.foConnected;
   $('#connectFoInline').hidden = state.foConnected;
@@ -133,7 +134,7 @@ function renderDetail(task) {
   if (['working', 'awaiting_approval'].includes(task.status)) actions.push(actionButton('add_option', '＋ Add option'));
   if (task.status === 'awaiting_approval') actions.push(actionButton('approve', 'Review & approve ↗', 'primary'));
   if (task.status === 'approved') actions.push(actionButton('book', 'Record booking ↗', 'primary'));
-  if (task.status === 'booked') actions.push(actionButton('complete', 'Verify outcome ↗', 'primary'));
+  if (task.doneWhen && ['working', 'awaiting_approval', 'approved', 'booked'].includes(task.status)) actions.push(actionButton('complete', 'Verify outcome ↗', 'primary'));
   if (['working', 'awaiting_approval', 'approved', 'booked', 'blocked'].includes(task.status)) actions.push(actionButton('followup', 'Log follow-up'));
   if (['working', 'awaiting_approval', 'approved', 'booked', 'blocked'].includes(task.status)) actions.push(actionButton('message', '＋ Log conversation'));
   if (['working', 'awaiting_approval', 'approved', 'booked', 'blocked'].includes(task.status)) actions.push(actionButton('schedule_followup', '⏱ Schedule reminder'));
@@ -155,6 +156,7 @@ function renderDetail(task) {
   if (task.status === 'completed') actions.push('<button type="button" class="secondary" data-download-receipt>↓ Export receipt</button>');
   const hasRealRun = task.mode !== 'demo' && ((task.events || []).some(event => event.kind === 'fo_request' && event.mode === 'live') || task.mcpCalls?.some(call => call.tool === 'ask_fo'));
   if (hasRealRun) actions.push('<button type="button" class="secondary" data-download-trace>↓ Export run trace</button>');
+  if (hasRealRun) actions.push('<button type="button" class="secondary" data-download-proof>↓ Export proof packet</button>');
   const lowestPrice = task.options.length ? Math.min(...task.options.map(option => option.price)) : null;
   const options = task.options.length ? [...task.options].sort((a, b) => a.price - b.price).map(o => {
     const budgetLabel = task.budget == null ? '' : o.price <= task.budget ? '<span class="quote-tag in-budget">Within budget</span>' : '<span class="quote-tag over-budget">Over budget</span>';
@@ -168,6 +170,13 @@ function renderDetail(task) {
   contract.className = 'fo-result outcome-contract';
   contract.innerHTML = `<div class="fo-result-top"><strong>Definition of done</strong><span>${task.doneWhen ? 'OWNER SET' : 'NEEDS DEFINITION'}</span></div><p>${esc(task.doneWhen || 'Add a concrete success check in Edit brief before closing this issue.')}</p><div class="fo-result-note">A Fo status of complete means its request finished. The issue closes only after a person verifies the outcome and records evidence.</div>`;
   panel.querySelector('.fact-row').before(contract);
+  const providerReplies = task.events.filter(event => event.kind === 'message' && event.direction === 'inbound').length;
+  const foReports = task.events.filter(event => event.kind === 'fo_reply' && event.mode === 'live').length;
+  const verified = task.status === 'completed' && task.receipt?.verifiedByHuman === true;
+  const proofChain = document.createElement('div');
+  proofChain.className = 'proof-chain';
+  proofChain.innerHTML = `<div class="proof-chain-title"><strong>Proof chain</strong><small>Each source has a different level of certainty</small></div><div class="proof-chain-grid"><div class="proof-step ${task.doneWhen ? 'ready' : 'pending'}"><span>01 · OWNER</span><strong>${task.doneWhen ? 'Outcome defined' : 'Define the outcome'}</strong><small>${task.doneWhen ? 'A measurable check is on record.' : 'Set “Done when” before a new Fo request.'}</small></div><div class="proof-step ${foReports ? 'ready' : 'pending'}"><span>02 · FO REPORT</span><strong>${foReports ? `${foReports} live update${foReports === 1 ? '' : 's'}` : 'Awaiting Fo action'}</strong><small>Fo reports progress; its provider actions need corroboration.</small></div><div class="proof-step ${providerReplies ? 'ready' : 'pending'}"><span>03 · PROVIDER LOG</span><strong>${providerReplies ? `${providerReplies} ${providerReplies === 1 ? 'reply' : 'replies'} logged` : 'No provider reply logged'}</strong><small>Entered by the owner from an actual reply.</small></div><div class="proof-step ${verified ? 'ready' : 'pending'}"><span>04 · HUMAN CHECK</span><strong>${verified ? 'Outcome verified' : 'Outcome remains open'}</strong><small>${verified ? 'A person attested to the result.' : 'Requires evidence against the outcome contract.'}</small></div></div>`;
+  panel.querySelector('.fact-row').before(proofChain);
   if (hasRealRun) {
     const runPanel = document.createElement('div');
     runPanel.className = 'fo-result run-ledger';
@@ -240,6 +249,7 @@ async function seedDemo() {
 function openFoAction(intent) {
   const task = state.tasks.find(item => item.id === state.selectedId);
   if (!task || !state.foConnected) return;
+  if (!task.fo?.externalId && !task.doneWhen?.trim()) { toast('Define “Done when” before sending a new task to Fo.', true); return openAction('edit'); }
   const chosen = task.options.find(item => item.id === task.approvedOptionId);
   state.foIntent = intent;
   $('#foActionTitle').textContent = intent === 'message' ? 'Reply to Fo' : intent === 'book' ? 'Arrange the approved option' : intent === 'recover' ? 'Recover from a setback' : 'Find real options';
@@ -319,6 +329,17 @@ document.addEventListener('click', async event => {
       link.href = url; link.download = `fo-run-trace-${state.selectedId.slice(0, 8)}.json`;
       document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast('Redacted run trace exported.');
+    } catch (error) { toast(error.message, true); }
+    return;
+  }
+  if (event.target.closest('[data-download-proof]')) {
+    try {
+      const { packet } = await api(`/api/tasks/${state.selectedId}/proof-packet`);
+      const blob = new Blob([JSON.stringify(packet, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = `proof-packet-${state.selectedId.slice(0, 8)}.json`;
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast('Proof packet exported. Review it before sharing.');
     } catch (error) { toast(error.message, true); }
     return;
   }

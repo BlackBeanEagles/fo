@@ -1,10 +1,11 @@
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import { createHmac, timingSafeEqual, randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { join, extname, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTask, applyAction, recordFoExchange, recordFoReply, recordFoFailure } from './workflow.mjs';
-import { beginFoConnection, completeFoConnection, connectionStatus, disconnectFo, askFo, getFoReply } from './fo.mjs';
+import { beginFoConnection, completeFoConnection, connectionStatus, disconnectFo, exportFoConnection, restoreFoConnection, askFo, getFoReply } from './fo.mjs';
+import { vaultKey, sealFoConnection, openFoConnection } from './fo-vault.mjs';
 import { foPrompt } from './fo-prompt.mjs';
 import { createDemoWorkspace, demoActionFor } from './demo.mjs';
 import { dueForFollowUp, recordFollowUpDue } from './followups.mjs';
@@ -25,6 +26,8 @@ let saveQueue = Promise.resolve();
 let userSaveQueue = Promise.resolve();
 let checkingFollowUps = false;
 const foInFlight = new Set();
+const foVaultKeys = new Map();
+const foVaultQueues = new Map();
 let syncingIssues = false;
 
 function githubOwner() {
@@ -94,7 +97,10 @@ async function checkFollowUps() {
         }
       }
     }
-    if (changed) await save();
+    if (changed) {
+      await save();
+      await Promise.all([...foVaultKeys.keys()].map(userId => saveFoConnection(userId)));
+    }
   } catch (error) { console.error('Follow-up check failed:', error); }
   finally { checkingFollowUps = false; }
 }
@@ -125,6 +131,35 @@ function saveUsers() {
     await rename(usersPath + '.tmp', usersPath);
   });
   return userSaveQueue;
+}
+function foVaultPath(userId) { return join(dataDir, 'fo-connections', `${userId}.json`); }
+async function unlockFo(user, password) {
+  const key = vaultKey(password, user.salt);
+  foVaultKeys.set(user.id, key);
+  try {
+    const envelope = JSON.parse(await readFile(foVaultPath(user.id), 'utf8'));
+    restoreFoConnection(user.id, openFoConnection(envelope, key));
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.error(`Saved Fo connection for ${user.username} could not be restored: ${error.message}`);
+  }
+}
+function saveFoConnection(userId) {
+  const key = foVaultKeys.get(userId);
+  const connection = exportFoConnection(userId);
+  if (!key || !connection) return Promise.resolve();
+  const envelope = sealFoConnection(connection, key);
+  const path = foVaultPath(userId);
+  const queued = (foVaultQueues.get(userId) || Promise.resolve()).catch(() => {}).then(async () => {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path + '.tmp', JSON.stringify(envelope));
+    await rename(path + '.tmp', path);
+  });
+  foVaultQueues.set(userId, queued);
+  return queued;
+}
+async function forgetFoConnection(userId) {
+  await (foVaultQueues.get(userId) || Promise.resolve()).catch(() => {});
+  await rm(foVaultPath(userId), { force: true });
 }
 function currentUser(req) {
   const cookie = String(req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith('pod_session='));
@@ -205,7 +240,8 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/api/fo/callback') {
       try {
         if (requestUrl.searchParams.get('error')) throw new Error('Fo authorization was declined.');
-        await completeFoConnection(requestUrl.searchParams.get('state'), requestUrl.searchParams.get('code'));
+        const userId = await completeFoConnection(requestUrl.searchParams.get('state'), requestUrl.searchParams.get('code'));
+        await saveFoConnection(userId);
         res.writeHead(303, { Location: '/#fo-connected', 'Cache-Control': 'no-store' });
       } catch (error) {
         res.writeHead(303, { Location: `/#fo-error=${encodeURIComponent(error.message)}`, 'Cache-Control': 'no-store' });
@@ -266,7 +302,7 @@ const server = createServer(async (req, res) => {
         if (users.some(item => item.username === username)) return send(res, 409, { error: 'Username is already taken.' });
         const salt = randomBytes(16).toString('hex');
         const created = { id: randomUUID(), username, salt, hash: passwordHash(password, salt) };
-        users.push(created); await saveUsers(); setSession(req, res, created);
+        users.push(created); await saveUsers(); await unlockFo(created, password); setSession(req, res, created);
         return send(res, 201, { user: { id: created.id, username } });
       }
       if (path === '/api/auth/login') {
@@ -275,6 +311,7 @@ const server = createServer(async (req, res) => {
         const found = users.find(item => item.username === username);
         const attempt = passwordHash(String(json.password || ''), found?.salt || '00000000000000000000000000000000');
         if (!found || !timingSafeEqual(Buffer.from(attempt, 'hex'), Buffer.from(found.hash, 'hex'))) return send(res, 401, { error: 'Incorrect username or password.' });
+        await unlockFo(found, String(json.password || ''));
         setSession(req, res, found);
         return send(res, 200, { user: { id: found.id, username } });
       }
@@ -314,6 +351,7 @@ const server = createServer(async (req, res) => {
       }
       if (path === '/api/fo/disconnect') {
         disconnectFo(user.id);
+        await forgetFoConnection(user.id);
         return send(res, 200, { ok: true });
       }
       if (path === '/api/tasks') {
@@ -369,6 +407,7 @@ const server = createServer(async (req, res) => {
           if (currentIndex === -1) return send(res, 404, { error: 'Task not found.' });
           tasks[currentIndex] = updated;
           await save();
+          await saveFoConnection(user.id).catch(error => console.error(`Fo connection save failed: ${error.message}`));
           if (foMatch[2] === 'ask' || updated !== task) void syncGitHub(updated);
           return send(res, 200, { task: updated });
         } catch (error) {
@@ -377,6 +416,7 @@ const server = createServer(async (req, res) => {
             if (currentIndex !== -1) {
               tasks[currentIndex] = recordMcpCall(tasks[currentIndex], { ...traceContext, error });
               await save();
+              await saveFoConnection(user.id).catch(error => console.error(`Fo connection save failed: ${error.message}`));
             }
           }
           throw error;

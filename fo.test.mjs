@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTask, applyAction, recordFoExchange, recordFoReply } from './workflow.mjs';
 import { foPrompt } from './fo-prompt.mjs';
-import { askFoArguments } from './fo.mjs';
+import { askFoArguments, restoreFoConnection, exportFoConnection, connectionStatus, disconnectFo } from './fo.mjs';
 
 test('Fo cannot book without a specific human approved option', () => {
   const task = createTask({ title: 'Print one poster', budget: 40 });
@@ -38,4 +38,16 @@ test('each task starts an isolated Fo conversation and follow-ups use its exact 
   assert.deepEqual(askFoArguments('Yes, send both', 'conversation-123', schema), { message: 'Yes, send both', conversationId: 'conversation-123' });
   assert.throws(() => askFoArguments('Find quotes', null, { message: {} }), /isolated conversation/);
   assert.throws(() => askFoArguments('Continue', 'conversation-123', { message: {} }), /explicit conversation ID/);
+});
+
+test('a saved Fo connection restores only for its workspace account', () => {
+  const saved = { redirectUrl: 'http://127.0.0.1:4174/api/fo/callback', tokens: { access_token: 'secret' }, clientInformation: { client_id: 'client-1' }, tools: [{ name: 'ask_fo' }] };
+  restoreFoConnection('owner-1', saved);
+  assert.equal(connectionStatus('owner-1').connected, true);
+  assert.equal(connectionStatus('owner-2').connected, false);
+  assert.deepEqual(exportFoConnection('owner-1'), saved);
+  assert.equal(exportFoConnection('owner-2'), null);
+  disconnectFo('owner-1');
+  assert.equal(connectionStatus('owner-1').connected, false);
+  assert.throws(() => restoreFoConnection('owner-1', { ...saved, redirectUrl: 'https://other.example/api/fo/callback' }), /invalid/);
 });

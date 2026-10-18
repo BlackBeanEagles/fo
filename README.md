@@ -11,9 +11,9 @@ npm ci
 npm start
 ```
 
-Open `http://127.0.0.1:4173/` in Chrome. Create a local workspace account, then click **Connect Fo**. The app registers an OAuth client with Wajo, redirects you to Wajo for authorization, and uses the authorized Fo MCP tools `ask_fo` and `get_fo_reply`. A Wajo login in another browser does not automatically authorize this app. The local callback must stay at `127.0.0.1:4173` (or use `localhost` consistently).
+Open `http://127.0.0.1:4173/` in Chrome, or the local port shown by the server. Create a local workspace account, then click **Connect Fo**. The app registers an OAuth client with Wajo, redirects you to Wajo for authorization, and uses the authorized Fo MCP tools `ask_fo` and `get_fo_reply`. A Wajo login in another browser does not automatically authorize this app. Keep the same local host and port throughout the OAuth redirect.
 
-Fo OAuth tokens, app login sessions, and registered Fo clients are held in server memory. Restarting the server requires signing back into the local workspace and reconnecting Fo. No Fo token is stored in the browser or committed to Git. Local tasks, password hashes, and evidence photos are in `.data/`, which is ignored by Git.
+Fo authorization is encrypted at rest under `.data/fo-connections/` with a key derived from that workspace account's password. Restarting the server requires signing back into the local workspace; that sign-in unlocks the saved Fo connection. The first connection after this change still needs fresh authorization because older sessions had no saved tokens. App login sessions remain in memory. No Fo token is stored in the browser or committed to Git. Local tasks, password hashes, and evidence photos are in `.data/`, which is ignored by Git. Treat a workspace password as unrecoverable: losing it also loses access to the saved Fo connection.
 
 ## Try the real workflow
 

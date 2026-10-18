@@ -13,6 +13,28 @@ export function connectionStatus(userId) {
   return { connected: !!record?.verified, pending: !!record?.authorizationUrl, tools: record?.tools || [] };
 }
 
+export function exportFoConnection(userId) {
+  const record = connections.get(userId);
+  if (!record?.verified || !record.tokens) return null;
+  return {
+    redirectUrl: record.redirectUrl.href,
+    tokens: record.tokens,
+    clientInformation: record.clientInformation,
+    tools: record.tools
+  };
+}
+
+export function restoreFoConnection(userId, saved) {
+  if (!saved?.tokens || !saved?.redirectUrl || !Array.isArray(saved.tools)) throw new Error('Saved Fo connection is incomplete.');
+  const redirectUrl = new URL(saved.redirectUrl);
+  if (!['127.0.0.1', 'localhost'].includes(redirectUrl.hostname) || redirectUrl.pathname !== '/api/fo/callback') throw new Error('Saved Fo redirect is invalid.');
+  connections.set(userId, {
+    state: null, startedAt: 0, redirectUrl, tokens: saved.tokens,
+    clientInformation: saved.clientInformation || null, verifier: null,
+    authorizationUrl: null, verified: true, tools: saved.tools
+  });
+}
+
 export async function beginFoConnection(userId, redirectUrl) {
   const state = randomBytes(32).toString('base64url');
   const record = { state, startedAt: Date.now(), redirectUrl: new URL(redirectUrl), tokens: null, clientInformation: null, verifier: null, authorizationUrl: null, verified: false, tools: [] };

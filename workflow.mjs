@@ -29,6 +29,19 @@ export function applyAction(task, action) {
   const next = structuredClone(task);
   let text;
   switch (action.type) {
+    case 'edit': {
+      requireStatus(task, ['new', 'working', 'blocked', 'awaiting_approval']);
+      const title = clean(action.title, 160);
+      if (!title) throw new Error('A task title is required.');
+      next.title = title;
+      next.description = clean(action.description, 2000);
+      next.category = ['repair', 'event', 'purchase', 'other'].includes(action.category) ? action.category : task.category;
+      next.priority = ['normal', 'urgent'].includes(action.priority) ? action.priority : task.priority;
+      next.budget = action.budget === '' || action.budget == null ? null : parseMoney(action.budget);
+      next.deadline = clean(action.deadline, 40) || null;
+      text = 'Task brief and limits updated. Review the current details before sending another Fo action.';
+      break;
+    }
     case 'start':
       requireStatus(task, ['new', 'blocked']);
       next.status = 'working';

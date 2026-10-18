@@ -127,6 +127,7 @@ function renderDetail(task) {
   const panel = $('#detailPanel');
   if (!task) { panel.innerHTML = `<div class="empty"><div class="empty-art">✳</div><h2>A clean slate feels good.</h2><p>Create a task or load sample scenarios to see Fo’s work move from request to receipt.</p><button class="secondary" id="emptyNew" type="button">Create your first task ↗</button></div>`; return; }
   const actions = [];
+    if (['new', 'working', 'blocked', 'awaiting_approval'].includes(task.status)) actions.push(actionButton('edit', 'Edit brief'));
   if (['new', 'blocked'].includes(task.status)) actions.push(actionButton('start', 'Start work ↗', 'primary'));
   if (['working', 'awaiting_approval'].includes(task.status)) actions.push(actionButton('add_option', '＋ Add option'));
   if (task.status === 'awaiting_approval') actions.push(actionButton('approve', 'Review & approve ↗', 'primary'));
@@ -172,6 +173,7 @@ function renderConversations(task) {
 }
 
 const actionConfig = {
+  edit: ['Edit task brief', 'Update private task details and limits.', `<label>Task title<input name="title" required maxlength="160"></label><label>Details<textarea name="description" rows="4" maxlength="2000" placeholder="Pickup area, file format, size, deadline, and what counts as done"></textarea></label><div class="form-row"><label>Category<select name="category"><option value="other">Other</option><option value="repair">Repair</option><option value="event">Event</option><option value="purchase">Purchase</option></select></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="urgent">Urgent</option></select></label></div><div class="form-row"><label>Budget (USD)<input name="budget" type="number" min="0" step="0.01" placeholder="Maximum total"></label><label>Deadline<input name="deadline" type="date"></label></div><p class="form-hint">Only you can see these private details. The next Fo action shares the current brief.</p>`],
   start: ['Start work', 'Record the first step.', `<label>What is happening now?<input name="note" placeholder="Calling repair providers"></label><label>Follow up at<input name="nextFollowUp" type="datetime-local"></label>`],
   add_option: ['Add an option', 'Record a quote or proposal.', `<label>Vendor or option name<input name="vendor" required placeholder="Reliable Repair Co."></label><div class="form-row"><label>Price (USD)<input name="price" type="number" min="0" step="0.01" required></label><label>Availability<input name="availability" placeholder="Friday, 2 PM"></label></div><label>Details<input name="details" placeholder="Includes parts and labor"></label>`],
   approve: ['Approve an option', 'A person authorizes the next step.', ''],
@@ -191,6 +193,12 @@ function openAction(type, optionId) {
   $('#actionEyebrow').textContent = subtitle.toUpperCase();
   $('#actionSubmit').textContent = type === 'approve' ? 'Approve selected quote ↗' : 'Save update ↗';
   $('#actionFields').innerHTML = fields;
+  if (type === 'edit') {
+    const form = $('#actionForm');
+    for (const key of ['title', 'description', 'category', 'priority']) form.elements[key].value = task[key] || '';
+    form.elements.budget.value = task.budget ?? '';
+    form.elements.deadline.value = task.deadline?.slice(0, 10) || '';
+  }
   if (type === 'schedule_followup' && state.foConnected && task.mode !== 'demo') $('#actionFields').insertAdjacentHTML('beforeend', '<label class="check"><input name="autoFollowUp" type="checkbox"> Let Fo check for an alternative when due. Fo may contact up to three providers for quotes; no booking or spending.</label>');
   if (type === 'approve') $('#actionFields').innerHTML = `<p class="approval-intro">Choose the quote you authorize. Booking still needs a confirmed result.</p><div class="approval-choices">${[...task.options].sort((a, b) => a.price - b.price).map((o, index) => `<label class="approval-choice"><input type="radio" name="optionId" value="${esc(o.id)}" ${o.id === (optionId || task.options[0]?.id) ? 'checked' : ''} required><span><strong>${esc(o.vendor)}</strong><small>${esc(o.availability || 'Timing not recorded')}${task.budget != null && o.price > task.budget ? ' · OVER BUDGET' : ''}</small></span><b>${money(o.price)}</b></label>`).join('')}</div>${task.budget != null && task.options.some(o => o.price > task.budget) ? '<label class="check budget-override"><input name="overrideBudget" type="checkbox"> I approve going over budget if that quote is chosen</label>' : ''}`;
   $('#actionDialog').showModal();

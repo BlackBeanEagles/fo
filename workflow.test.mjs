@@ -44,3 +44,14 @@ test('conversation records direction and schedules a reminder without claiming c
   assert.equal(task.autoFollowUp, false);
   assert.match(task.events.at(-1).text, /Reminder scheduled/);
 });
+
+test('owner can revise an imported task brief without changing its source or approval state', () => {
+  let task = createTask({ title: 'Print poster' }, { type: 'github', owner: 'BlackBeanEagles', repo: 'fo', issue: 1 });
+  task = applyAction(task, { type: 'edit', title: 'Print A3 poster', description: 'Pickup in downtown by Friday', budget: '30', deadline: '2026-10-19', actor: 'owner' });
+  assert.equal(task.description, 'Pickup in downtown by Friday');
+  assert.equal(task.budget, 30);
+  assert.equal(task.source.issue, 1);
+  assert.equal(task.status, 'new');
+  assert.equal(task.events.at(-1).kind, 'edit');
+  assert.throws(() => applyAction(task, { type: 'edit', title: '  ', budget: '30' }), /title/);
+});

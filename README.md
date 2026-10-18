@@ -17,7 +17,7 @@ Fo OAuth tokens, app login sessions, and registered Fo clients are held in serve
 
 ## Try the real workflow
 
-1. Use **New task → Poster** for a short task you can actually finish. Add your city, print file details, deadline, and true spending limit before sending anything to Fo.
+1. Use **New task → Poster** for a short task you can actually finish, or open the imported GitHub poster issue. Use **Edit brief** to add your city, print file details, deadline, and true spending limit before sending anything to Fo. These added details stay in your private workspace.
 2. Click **Ask Fo for quotes**. Review the exact task details and permitted outreach, then authorize it. The app sends a real MCP request. Its reply and conversation ID appear in the task, labeled **LIVE MCP**. **Check Fo reply** retrieves later results.
 3. Record an actual vendor quote, then approve one option. For a setback, mark the task blocked and use **Try another path**, or schedule an explicitly authorized Fo follow-up. Fo may research and contact providers within the shown scope; it may not spend or book during research.
 4. Only after a specific quote is approved, use **Ask Fo to book**. This sends the approved vendor and maximum total. A changed price, deposit, or payment request requires fresh approval.

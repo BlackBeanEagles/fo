@@ -79,6 +79,12 @@ function saveFoSeen(task, event) {
   try { localStorage.setItem(`proof-of-done:fo-seen:${state.user.id}`, JSON.stringify(state.foSeen)); }
   catch { /* This device may block local storage. */ }
 }
+function rememberSelection(id) {
+  state.selectedId = id;
+  if (!state.user) return;
+  try { localStorage.setItem(`proof-of-done:selected:${state.user.id}`, id); }
+  catch { /* Selection still works for this page session. */ }
+}
 function proofMarkup(task, presentation = false) {
   const latestReport = newest((task.events || []).filter(event => event.kind === 'fo_web_import' || event.kind === 'fo_reply' && event.mode === 'live' && foMessageKind(event.text) === 'result'))[0];
   const provider = newest(providerReplyEvents(task))[0];
@@ -138,16 +144,25 @@ function renderJudge() {
   const simulated = task.mode === 'demo';
   const foEvent = latestFoEvent(task);
   const foKind = foEvent?.kind === 'fo_web_import' ? 'result' : foMessageKind(foEvent?.text);
+  const calls = task.mcpCalls || [];
   const setbacks = newest((task.events || []).filter(event => ['block', 'fo_error'].includes(event.kind)));
   const gapEvent = newest((task.events || []).filter(event => event.kind === 'fo_reply' && foMessageKind(event.text) === 'empty'))[0];
   const setbackAt = setbacks[0]?.at || gapEvent?.at || null;
   const recovery = newest((task.events || []).filter(event => setbackAt && event.at > setbackAt && (event.intent === 'recover' || ['followup', 'edit', 'fo_web_import'].includes(event.kind))));
+  const failedCall = calls.find(call => call.resultStatus === 'error');
+  const retriedCall = failedCall && calls.find(call => call.tool === failedCall.tool && call.resultStatus !== 'error' && call.startedAt > failedCall.startedAt);
+  const setbackTitle = setbacks[0] ? esc(shortText(setbacks[0].text, 220)) : gapEvent ? 'MCP reply gap' : failedCall ? `${esc(failedCall.tool)} call failed` : 'No setback recorded';
+  const setbackDetail = setbacks[0] ? `Recorded ${niceDate(setbacks[0].at)}` : gapEvent ? 'MCP returned no text; the original Fo conversation needs separate review.' : failedCall ? `Transport or tool error at ${niceDate(failedCall.startedAt)}. This attempt did not establish a provider result.` : 'This run has no logged vendor refusal, missed slot, or tool failure.';
+  const recoveryTitle = recovery[0] ? recovery[0].kind === 'fo_web_import' ? 'Owner imported the Wajo web reply' : esc(shortText(recovery[0].text, 220)) : retriedCall ? `Retried ${esc(retriedCall.tool)} successfully` : 'No recovery attempted yet';
+  const recoveryDetail = recovery[0] ? `${recovery[0].kind === 'fo_web_import' ? 'This repairs the app evidence gap; it does not prove vendor outreach.' : 'Next permitted step'} · ${niceDate(recovery[0].at)}` : retriedCall ? `App MCP call resumed at ${niceDate(retriedCall.startedAt)}. Provider confirmation still requires its original source.` : 'The next action needs a real update or an owner-approved change of plan.';
   const approval = task.options.find(option => option.id === task.approvedOptionId);
-  const calls = task.mcpCalls || [];
+  const askCalls = calls.filter(call => call.tool === 'ask_fo');
+  const askSucceeded = askCalls.filter(call => call.resultStatus !== 'error').length;
+  const askSummary = simulated ? 'No Fo MCP call' : askCalls.length ? `${askCalls.length} ask_fo attempt${askCalls.length === 1 ? '' : 's'} · ${askSucceeded} succeeded` : realFoRun(task) ? 'Earlier Fo run · exact call count unavailable' : 'No Fo MCP call';
   const slides = [
     `<div class="judge-slide"><div class="judge-kicker">01 / THE MISSION</div><h3>${esc(task.title)}</h3><p class="judge-lead">${esc(task.description || 'No details provided yet.')}</p><div class="judge-facts"><div><small>OUTCOME CONTRACT</small><strong>${esc(task.doneWhen || 'Not defined yet')}</strong></div><div><small>BUDGET</small><strong>${money(task.budget)}</strong></div><div><small>STATUS</small><strong>${statusName(task.status)}</strong></div></div>${journeyMarkup(task)}</div>`,
-    `<div class="judge-slide"><div class="judge-kicker">02 / FO ACTION</div><h3>${simulated ? 'A sample Fo step' : realFoRun(task) ? 'A real MCP request was sent' : 'Fo has not been called yet'}</h3><p class="judge-lead">${simulated ? 'This sequence is simulated and never contacted a provider.' : foEvent ? foKind === 'result' ? esc(shortText(foEvent.text, 700)) : foKind === 'empty' ? 'MCP returned no textual reply. The original Fo conversation may contain details; no provider result is established here.' : 'Fo reported that it was still working. No provider reply is established here.' : 'Send a scoped request to Fo after the owner reviews the action.'}</p><div class="judge-trace-card"><span>WHAT THE APP CAN VERIFY</span><strong>${simulated ? 'No Fo MCP call' : `${calls.filter(call => call.tool === 'ask_fo').length || (realFoRun(task) ? 1 : 0)} app-visible ask_fo request(s)`}</strong><small>${foEvent ? `${foEvent.kind === 'fo_web_import' ? 'Owner-imported Wajo web reply' : 'App-visible Fo MCP response'}: ${niceDate(foEvent.at)}` : 'No app-visible Fo response yet'}</small></div></div>`,
-    `<div class="judge-slide"><div class="judge-kicker">03 / SETBACK & RECOVERY</div><h3>Keep the issue open when reality pushes back.</h3><div class="judge-two"><div class="judge-story"><span>SETBACK ON RECORD</span><strong>${setbacks[0] ? esc(shortText(setbacks[0].text, 220)) : gapEvent ? 'MCP reply gap' : 'No setback recorded'}</strong><p>${setbacks[0] ? `Recorded ${niceDate(setbacks[0].at)}` : gapEvent ? 'MCP returned no text; the original Fo conversation needs separate review.' : 'This run has no logged vendor refusal, missed slot, or tool failure.'}</p></div><div class="judge-story"><span>RECOVERY ON RECORD</span><strong>${recovery[0] ? recovery[0].kind === 'fo_web_import' ? 'Owner imported the Wajo web reply' : esc(shortText(recovery[0].text, 220)) : 'No recovery attempted yet'}</strong><p>${recovery[0] ? `${recovery[0].kind === 'fo_web_import' ? 'This repairs the app evidence gap; it does not prove vendor outreach.' : 'Next permitted step'} · ${niceDate(recovery[0].at)}` : 'The next action needs a real update or an owner-approved change of plan.'}</p></div></div><div class="judge-story judge-decision"><span>OWNER DECISION</span><strong>${approval ? `${esc(approval.vendor)} · ${money(approval.price)}` : 'No option approved'}</strong><p>${approval ? 'Approval records permission for one option; booking and payment are separate.' : 'No money or booking was authorized by this task.'}</p></div></div>`,
+    `<div class="judge-slide"><div class="judge-kicker">02 / FO ACTION</div><h3>${simulated ? 'A sample Fo step' : realFoRun(task) ? 'A real MCP request was sent' : 'Fo has not been called yet'}</h3><p class="judge-lead">${simulated ? 'This sequence is simulated and never contacted a provider.' : foEvent ? foKind === 'result' ? esc(shortText(foEvent.text, 700)) : foKind === 'empty' ? 'MCP returned no textual reply. The original Fo conversation may contain details; no provider result is established here.' : 'Fo reported that it was still working. No provider reply is established here.' : 'Send a scoped request to Fo after the owner reviews the action.'}</p><div class="judge-trace-card"><span>WHAT THE APP CAN VERIFY</span><strong>${esc(askSummary)}</strong><small>${foEvent ? `${foEvent.kind === 'fo_web_import' ? 'Owner-imported Wajo web reply' : 'App-visible Fo MCP response'}: ${niceDate(foEvent.at)}` : 'No app-visible Fo response yet'}</small></div></div>`,
+    `<div class="judge-slide"><div class="judge-kicker">03 / SETBACK & RECOVERY</div><h3>Keep the issue open when reality pushes back.</h3><div class="judge-two"><div class="judge-story"><span>SETBACK ON RECORD</span><strong>${setbackTitle}</strong><p>${setbackDetail}</p></div><div class="judge-story"><span>RECOVERY ON RECORD</span><strong>${recoveryTitle}</strong><p>${recoveryDetail}</p></div></div><div class="judge-story judge-decision"><span>OWNER DECISION</span><strong>${approval ? `${esc(approval.vendor)} · ${money(approval.price)}` : 'No option approved'}</strong><p>${approval ? 'Approval records permission for one option; booking and payment are separate.' : 'No money or booking was authorized by this task.'}</p></div></div>`,
     `<div class="judge-slide"><div class="judge-kicker">04 / EVIDENCE</div><h3>What can we actually prove?</h3>${proofMarkup(task, true)}</div>`,
     `<div class="judge-slide"><div class="judge-kicker">05 / RUN TRACE & OUTCOME</div><h3>${humanVerified(task) ? 'The result was human verified.' : 'The real-world outcome is still open.'}</h3><p class="judge-lead">${simulated ? 'This is a sample scenario. Its steps are not a real Fo run.' : `The app logged ${calls.length} MCP call${calls.length === 1 ? '' : 's'}. Fo’s internal phone and email tool calls are not exposed to this app.`}</p><div class="judge-call-list">${calls.length ? calls.map(call => `<div><span>${esc(call.tool)}</span><strong>${esc(call.resultStatus || 'unknown')}</strong><small>${niceDate(call.startedAt)} · ${Math.round(call.durationMs || 0)} ms</small></div>`).join('') : '<div><strong>No exact MCP calls logged for this task.</strong><small>Earlier events may have a partial trace.</small></div>'}</div>${!simulated && realFoRun(task) ? `<button type="button" class="primary" data-judge-trace="${esc(task.id)}">↓ Export redacted trace</button>` : ''}<p class="judge-caveat">Trace export omits Fo’s internal tools and masks contact patterns. Review it before sharing.</p></div>`
   ];
@@ -187,7 +202,12 @@ async function refresh() {
   state.runs = status.runs || { runs: 0, verified: 0, inProgress: 0 };
   $('#syncGitHub').hidden = !status.githubIssueSyncEnabled;
   renderFoConnection();
-  if (!tasks.some(t => t.id === state.selectedId)) state.selectedId = featuredTaskFor(tasks)?.id || null;
+  if (!tasks.some(t => t.id === state.selectedId)) {
+    let remembered = null;
+    try { remembered = localStorage.getItem(`proof-of-done:selected:${accountId}`); }
+    catch { /* Use the newest task when local storage is unavailable. */ }
+    state.selectedId = tasks.find(task => task.id === remembered)?.id || featuredTaskFor(tasks)?.id || null;
+  }
   render();
 }
 function renderFoConnection() {
@@ -477,7 +497,7 @@ document.addEventListener('click', async event => {
     const id = quick.dataset.featureReply || quick.dataset.featureCheck || quick.dataset.featureImport;
     const task = state.tasks.find(item => item.id === id);
     if (!task) return;
-    state.selectedId = id;
+    rememberSelection(id);
     if (quick.hasAttribute('data-feature-import')) return openFoImport(task);
     if (quick.hasAttribute('data-feature-reply')) return openFoAction('message');
     try { await api(`/api/tasks/${id}/fo/reply`, { method: 'POST', body: '{}' }); await refresh(); toast('Existing Fo conversation checked.'); }
@@ -489,7 +509,7 @@ document.addEventListener('click', async event => {
     const id = inboxTask.dataset.inboxOpen || inboxTask.dataset.inboxReply || inboxTask.dataset.inboxCheck || inboxTask.dataset.featureOpen;
     const task = state.tasks.find(item => item.id === id);
     if (!task) return;
-    state.selectedId = id;
+    rememberSelection(id);
     if (inboxTask.matches('[data-inbox-open],[data-inbox-reply],[data-feature-open]')) saveFoSeen(task, latestFoEvent(task));
     if (inboxTask.matches('[data-inbox-check]')) {
       try { await api(`/api/tasks/${id}/fo/reply`, { method: 'POST', body: '{}' }); await refresh(); toast('Existing Fo conversation checked.'); }
@@ -525,7 +545,7 @@ document.addEventListener('click', async event => {
   if (filter) return setFilter(filter.dataset.filter || filter.dataset.nav);
   const select = event.target.closest('[data-select]');
   if (select) {
-    state.selectedId = select.dataset.select;
+    rememberSelection(select.dataset.select);
     const selectedTask = state.tasks.find(item => item.id === state.selectedId);
     if (selectedTask) saveFoSeen(selectedTask, latestFoEvent(selectedTask));
     if (!visibleTasks(state.tasks).some(t => t.id === state.selectedId)) {

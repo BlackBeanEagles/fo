@@ -24,6 +24,8 @@ Fo authorization is encrypted at rest under `.data/fo-connections/` with a key d
 5. Record a booking only after obtaining its real confirmation. A quote-only task can be verified without a booking once a person checks a real provider reply against **Done when** and records evidence. Physical tasks require their own real-world check; add a photo or receipt if possible. Photos are served only to the task owner.
 6. The **Proof chain** shows the outcome contract, Fo-reported updates, owner-logged provider replies, and human attestation separately. Use **Export proof packet** for a redacted bundle of those milestones and the app's MCP trace. Review it before sharing: owner-entered provider notes are not independently authenticated, and photo contents are not included. **Export run trace** remains available separately. The board counts one run per distinct real task sent to Fo, and a success only when its outcome is human verified. Earlier runs are labeled partial because exact tool telemetry was added later. Fo's internal phone and email tool calls are outside this app's trace.
 
+The signed-in board has a full-screen workspace photo and a **Live evidence** strip. Its numbers distinguish real Fo runs, owner-logged provider replies, owner-approved options, and human-verified outcomes for the current account. **Live tasks** and **Samples** filter the board without merging their data. **Copy safe snapshot** puts only aggregate counts and provenance caveats on the clipboard; it excludes task names, vendors, contact details, and private proof.
+
 The **Load demo workspace** and **Simulate next step** paths are labeled simulated and never call Fo. A Fo response, including one with status `complete`, does not automatically mark a task booked or verified.
 
 ## GitHub issue integration
@@ -40,6 +42,6 @@ For status comments, also set `GITHUB_TOKEN` to a fine-grained token with **Issu
 - Booking and spending are gated by a human-selected vendor and quoted amount. The UI shows Fo's permitted action before sending it. Research prompts set a total three-provider limit, ask Fo to identify itself as an AI assistant, and ask it to respect refusals.
 - Follow-ups can run automatically only when the user explicitly opts in while Fo is connected. They can seek alternatives and quotes but cannot book or spend.
 - Fo tool responses are preserved as reported. Vendor quotes and booking confirmations must be checked before recording them as facts. Completion needs separate evidence. A free-form reply to Fo cannot authorize booking or spending; use the gated booking flow.
-- This is a local hackathon build. Sessions and Fo tokens do not survive restarts; rate limiting, durable encrypted tokens, and production hosting are still needed for a public service.
+- This is a local hackathon build. Login sessions do not survive restarts; Fo authorization is restored from the encrypted workspace vault after the owner signs back in. Rate limiting and production-grade hosting are still needed for a public service.
 
 Run `npm test` to check workflow, GitHub webhook signatures and deduplication, photo ownership, and account isolation. See [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) for the real demo sequence and [SUBMISSION_DRAFT.md](SUBMISSION_DRAFT.md) for a draft writeup. Recording and posting are left for the team.

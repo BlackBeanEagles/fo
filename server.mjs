@@ -225,7 +225,7 @@ function verifyGitHub(req, raw) {
 }
 async function serveFile(pathname, res) {
   const file = pathname === '/' ? 'index.html' : pathname.slice(1);
-  if (!['index.html', 'app.js', 'style.css', 'workspace-background.png'].includes(file)) return send(res, 404, { error: 'Not found.' });
+  if (!['index.html', 'app.js', 'style.css', 'workspace-background.png', 'workspace-background-v2.png'].includes(file)) return send(res, 404, { error: 'Not found.' });
   const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' }[extname(file)];
   try {
     const content = await readFile(join(publicPath, file));

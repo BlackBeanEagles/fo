@@ -93,11 +93,28 @@ function render() {
   $('#sideApprovalCount').textContent = approval.length;
   $('#sideAttentionCount').textContent = attention.length;
   $('#taskCount').textContent = tasks.length;
+  renderShowcase(tasks);
   renderAttention(attention);
   renderList(tasks);
   const selected = tasks.find(t => t.id === state.selectedId);
   renderDetail(selected);
   renderConversations(selected);
+}
+function showcaseCounts(tasks) {
+  const live = tasks.filter(task => task.mode !== 'demo');
+  return {
+    runs: state.runs.runs || 0,
+    replies: live.reduce((total, task) => total + task.events.filter(event => event.kind === 'message' && event.direction === 'inbound').length, 0),
+    approvals: live.filter(task => !!task.approvedOptionId).length,
+    verified: live.filter(task => task.status === 'completed' && task.receipt?.verifiedByHuman === true).length
+  };
+}
+function renderShowcase(tasks) {
+  const counts = showcaseCounts(tasks);
+  $('#showcaseRuns').textContent = counts.runs;
+  $('#showcaseReplies').textContent = counts.replies;
+  $('#showcaseApprovals').textContent = counts.approvals;
+  $('#showcaseVerified').textContent = counts.verified;
 }
 function renderAttention(items) {
   $('#attentionSection').hidden = items.length === 0;
@@ -109,7 +126,7 @@ function renderAttention(items) {
 }
 function visibleTasks(tasks) {
   return tasks.filter(t => {
-    const match = state.filter === 'all' || (state.filter === 'active' && !['completed', 'cancelled'].includes(t.status)) || (state.filter === 'approval' && t.status === 'awaiting_approval') || (state.filter === 'attention' && needsAttention(t)) || (state.filter === 'done' && t.status === 'completed');
+    const match = state.filter === 'all' || (state.filter === 'active' && !['completed', 'cancelled'].includes(t.status)) || (state.filter === 'approval' && t.status === 'awaiting_approval') || (state.filter === 'attention' && needsAttention(t)) || (state.filter === 'done' && t.status === 'completed') || (state.filter === 'live' && t.mode !== 'demo') || (state.filter === 'demo' && t.mode === 'demo');
     const text = `${t.title} ${t.description} ${categoryNames[t.category] || ''}`.toLowerCase();
     return match && text.includes(state.search);
   });
@@ -272,6 +289,13 @@ document.addEventListener('click', async event => {
   if (event.target.closest('#newTask,#newTaskSide,#panelNew,#emptyNew')) return $('#taskDialog').showModal();
   if (event.target.closest('#seedDemo,#seedSide')) return seedDemo();
   if (event.target.closest('#viewAllAttention')) return setFilter('attention');
+  if (event.target.closest('#copyShowcase')) {
+    const { runs, replies, approvals, verified } = showcaseCounts(state.tasks);
+    const summary = `Proof of Done — private workspace snapshot\nReal Fo MCP runs: ${runs}\nOwner-logged provider replies: ${replies}\nOptions approved by a person: ${approvals}\nHuman-verified outcomes: ${verified}\nSample scenarios excluded. Fo's internal phone and email tool calls are not visible to this app; provider replies must be checked against their original source.`;
+    try { await navigator.clipboard.writeText(summary); toast('Safe, count-only snapshot copied.'); }
+    catch { toast('Clipboard access unavailable.', true); }
+    return;
+  }
   const template = event.target.closest('[data-template]');
   if (template) {
     const key = template.dataset.template, form = $('#taskForm'), preset = templates[key];

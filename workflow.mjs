@@ -55,7 +55,7 @@ export function applyAction(task, action) {
       const vendor = clean(action.vendor, 120);
       if (!vendor) throw new Error('Vendor or option name is required.');
       const price = parseMoney(action.price);
-      const option = { id: randomUUID(), vendor, price, availability: clean(action.availability, 160), details: clean(action.details, 500), source: clean(action.source, 160), addedAt: now };
+      const option = { id: randomUUID(), vendor, price, availability: clean(action.availability, 160), details: clean(action.details, 500), source: clean(action.source, 160), sourceMessage: clean(action.sourceMessage, 2000), sourceUrl: safeEvidenceUrl(action.sourceUrl), receivedAt: validObservedAt(action.receivedAt), addedAt: now };
       next.options.push(option);
       next.status = 'awaiting_approval';
       text = `Option added: ${vendor} at $${price.toFixed(2)}.`;
@@ -132,8 +132,26 @@ export function applyAction(task, action) {
   if (action.type === 'message') {
     event.party = clean(action.party, 120) || 'Provider';
     event.direction = action.direction === 'outbound' ? 'outbound' : 'inbound';
+    event.sourceUrl = safeEvidenceUrl(action.sourceUrl);
+    event.receivedAt = validObservedAt(action.receivedAt);
   }
   next.events.push(event);
+  return next;
+}
+
+export function recordImportedFoReply(task, { text, sourceUrl, observedAt, actor }) {
+  if (task.mode === 'demo' || !active.has(task.status) || !task.fo?.externalId) throw new Error('An open live Fo conversation is required.');
+  const expected = `https://wajo.ai/fo/c/${task.fo.externalId}`;
+  if (sourceUrl !== expected) throw new Error('Use this task’s original Wajo conversation URL.');
+  const reply = clean(text, 12000);
+  if (!reply) throw new Error('Paste the Fo web reply before importing it.');
+  const at = validObservedAt(observedAt);
+  if (!at) throw new Error('Enter when the Fo reply appeared.');
+  const next = structuredClone(task);
+  const importedAt = new Date().toISOString();
+  next.fo.webReply = { text: reply, sourceUrl: expected, observedAt: at, importedAt, importedBy: clean(actor, 80) || 'workspace owner' };
+  next.updatedAt = importedAt;
+  next.events.push({ id: randomUUID(), at: importedAt, actor: next.fo.webReply.importedBy, kind: 'fo_web_import', mode: 'owner_import', text: reply, sourceUrl: expected, observedAt: at });
   return next;
 }
 
@@ -180,6 +198,18 @@ function requireStatus(task, allowed) {
   if (!allowed.includes(task.status)) throw new Error(`Cannot do that while task is ${task.status.replaceAll('_', ' ')}.`);
 }
 function clean(value, max) { return String(value ?? '').trim().slice(0, max); }
+function safeEvidenceUrl(value) {
+  const raw = clean(value, 1000);
+  if (!raw) return null;
+  try { const url = new URL(raw); if (url.protocol === 'https:') return url.toString(); } catch { /* invalid URL */ }
+  throw new Error('Evidence links must use a valid https URL.');
+}
+function validObservedAt(value) {
+  if (!value) return null;
+  const time = new Date(value);
+  if (!Number.isFinite(time.getTime()) || time.getTime() > Date.now() + 60_000) throw new Error('Enter a valid evidence time that is not in the future.');
+  return time.toISOString();
+}
 function parseMoney(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0 || number > 1_000_000) throw new Error('Enter a valid nonnegative amount under $1,000,000.');

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTask, applyAction } from './workflow.mjs';
+import { createTask, applyAction, recordFoExchange, recordImportedFoReply } from './workflow.mjs';
+import { exportProofPacket } from './proof-packet.mjs';
 
 test('a booking is not treated as completed without human evidence', () => {
   let task = createTask({ title: 'Repair projector', doneWhen: 'A teammate tests the repaired projector.', budget: 150 });
@@ -57,4 +58,20 @@ test('owner can revise an imported task brief without changing its source or app
   assert.equal(task.status, 'new');
   assert.equal(task.events.at(-1).kind, 'edit');
   assert.throws(() => applyAction(task, { type: 'edit', title: '  ', budget: '30' }), /title/);
+});
+
+test('an owner-imported Wajo reply remains distinct from MCP and provider evidence', () => {
+  const conversationId = 'dcfdcc76-b48a-4439-ad99-4443717704a5';
+  const reply = { status: 'complete', text: 'The run finished without a textual reply.', conversationId };
+  const task = recordFoExchange(createTask({ title: 'Get a quote', doneWhen: 'A provider sends a quote.' }), { intent: 'research', prompt: 'Get a quote', reply });
+  const sourceUrl = `https://wajo.ai/fo/c/${conversationId}`;
+  assert.throws(() => recordImportedFoReply(task, { text: 'Provider confirmed', sourceUrl: 'https://elsewhere.example', observedAt: new Date().toISOString() }), /original Wajo/);
+  const imported = recordImportedFoReply(task, { text: 'Fo needs a delivery date before contacting anyone.', sourceUrl, observedAt: new Date().toISOString(), actor: 'owner' });
+  assert.equal(imported.fo.lastResponse, reply.text);
+  assert.equal(imported.fo.webReply.text, 'Fo needs a delivery date before contacting anyone.');
+  const packet = exportProofPacket(imported);
+  assert.equal(packet.evidenceState.foReports, 0);
+  assert.equal(packet.evidenceState.ownerImportedFoReplies, 1);
+  assert.equal(packet.evidenceState.providerRepliesLogged, 0);
+  assert.equal(packet.milestones.at(-1).source, 'Wajo web reply imported by owner');
 });

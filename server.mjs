@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import { createHmac, timingSafeEqual, randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { join, extname, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createTask, applyAction, recordFoExchange, recordFoReply, recordFoFailure } from './workflow.mjs';
+import { createTask, applyAction, recordFoExchange, recordFoReply, recordFoFailure, recordImportedFoReply } from './workflow.mjs';
 import { beginFoConnection, completeFoConnection, connectionStatus, disconnectFo, exportFoConnection, restoreFoConnection, askFo, getFoReply } from './fo.mjs';
 import { vaultKey, sealFoConnection, openFoConnection } from './fo-vault.mjs';
 import { foPrompt } from './fo-prompt.mjs';
@@ -199,22 +199,40 @@ async function syncGitHub(task) {
   if (!GITHUB_TOKEN || process.env.GITHUB_SYNC_COMMENTS !== '1' || task.source?.type !== 'github') return;
   const { owner, repo, issue } = task.source;
   const comment = `**Proof of Done · ${task.status.replaceAll('_', ' ')}**\n\nA private workspace update is available to the task owner. Vendor messages, prices, and receipts stay in the workspace.`;
+  const current = tasks.find(item => item.id === task.id);
+  if (current?.githubSync?.taskUpdatedAt === task.updatedAt && current.githubSync.state === 'synced') return;
+  const record = async update => {
+    const index = tasks.findIndex(item => item.id === task.id);
+    if (index < 0) return;
+    tasks[index] = { ...tasks[index], githubSync: { ...update, taskUpdatedAt: task.updatedAt, at: new Date().toISOString() } };
+    await save();
+  };
   try {
-    const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue}/comments`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'proof-of-done-hackathon' },
-      body: JSON.stringify({ body: comment })
-    });
-    if (!response.ok) console.error(`GitHub comment failed: ${response.status}`);
-    if (response.ok && task.status === 'completed') {
+    let commentUrl = current?.githubSync?.taskUpdatedAt === task.updatedAt ? current.githubSync.commentUrl : null;
+    if (!commentUrl) {
+      const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue}/comments`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'proof-of-done-hackathon' },
+        body: JSON.stringify({ body: comment })
+      });
+      if (!response.ok) throw new Error(`GitHub comment failed: ${response.status}`);
+      const posted = await response.json();
+      commentUrl = posted.html_url || `https://github.com/${owner}/${repo}/issues/${issue}`;
+      await record({ state: 'commented', commentUrl });
+    }
+    if (task.status === 'completed') {
       const closed = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'proof-of-done-hackathon' },
         body: JSON.stringify({ state: 'closed' })
       });
-      if (!closed.ok) console.error(`GitHub issue close failed: ${closed.status}`);
+      if (!closed.ok) throw new Error(`GitHub issue close failed: ${closed.status}`);
     }
-  } catch (error) { console.error(`GitHub comment failed: ${error.message}`); }
+    await record({ state: 'synced', commentUrl, issueClosed: task.status === 'completed' });
+  } catch (error) {
+    console.error(`GitHub sync failed: ${error.message}`);
+    await record({ state: 'failed', commentUrl: tasks.find(item => item.id === task.id)?.githubSync?.commentUrl || null, error: error.message });
+  }
 }
 function verifyGitHub(req, raw) {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -232,6 +250,25 @@ async function serveFile(pathname, res) {
     res.writeHead(200, { 'Content-Type': mime + (extname(file) === '.png' ? '' : '; charset=utf-8'), 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     res.end(content);
   } catch { send(res, 404, { error: 'Not found.' }); }
+}
+
+async function saveEvidenceImage(taskId, data) {
+  const match = String(data).match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error('Use a JPEG or PNG evidence image.');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length > 2_000_000 || bytes.length < 8) throw new Error('Evidence image must be under 2 MB.');
+  const valid = match[1] === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes.subarray(0, 3).equals(Buffer.from([255,216,255]));
+  if (!valid) throw new Error('Evidence image format is invalid.');
+  const name = `${taskId}-${randomUUID()}.${match[1] === 'png' ? 'png' : 'jpg'}`;
+  await mkdir(join(dataDir, 'evidence'), { recursive: true });
+  await writeFile(join(dataDir, 'evidence', name), bytes);
+  return name;
+}
+
+async function sendEvidence(res, file) {
+  const content = await readFile(join(dataDir, 'evidence', file));
+  res.writeHead(200, { 'Content-Type': file.endsWith('.png') ? 'image/png' : 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.end(content);
 }
 
 const server = createServer(async (req, res) => {
@@ -290,10 +327,15 @@ const server = createServer(async (req, res) => {
       const task = tasks.find(item => item.id === evidenceMatch[1] && item.ownerId === user.id);
       if (!task) return send(res, 404, { error: 'Task not found.' });
       if (!task.receipt?.photoFile) return send(res, 404, { error: 'No photo evidence exists.' });
-      const extension = task.receipt.photoFile.endsWith('.png') ? '.png' : '.jpg';
-      const content = await readFile(join(dataDir, 'evidence', task.receipt.photoFile));
-      res.writeHead(200, { 'Content-Type': extension === '.png' ? 'image/png' : 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
-      return res.end(content);
+      return sendEvidence(res, task.receipt.photoFile);
+    }
+    const optionEvidenceMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/option-evidence\/([a-f0-9-]+)$/);
+    if (req.method === 'GET' && optionEvidenceMatch) {
+      if (!user) return send(res, 401, { error: 'Sign in to see evidence.' });
+      const task = tasks.find(item => item.id === optionEvidenceMatch[1] && item.ownerId === user.id);
+      const option = task?.options.find(item => item.id === optionEvidenceMatch[2]);
+      if (!option?.evidenceFile) return send(res, 404, { error: 'Quote evidence not found.' });
+      return sendEvidence(res, option.evidenceFile);
     }
     if (req.method === 'GET' && path.startsWith('/api/tasks/')) {
       if (!user) return send(res, 401, { error: 'Sign in to see your tasks.' });
@@ -377,6 +419,23 @@ const server = createServer(async (req, res) => {
         tasks.unshift(...seeded); await save();
         return send(res, 201, { tasks: seeded });
       }
+      const githubTaskSyncMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/github\/sync$/);
+      if (githubTaskSyncMatch) {
+        const task = tasks.find(item => item.id === githubTaskSyncMatch[1] && item.ownerId === user.id);
+        if (!task) return send(res, 404, { error: 'Task not found.' });
+        if (task.source?.type !== 'github') return send(res, 409, { error: 'This task did not come from GitHub.' });
+        if (!process.env.GITHUB_TOKEN || process.env.GITHUB_SYNC_COMMENTS !== '1') return send(res, 409, { error: 'GitHub status comments are not configured.' });
+        await syncGitHub(task);
+        return send(res, 200, { githubSync: tasks.find(item => item.id === task.id)?.githubSync || null });
+      }
+      const importMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/fo\/import-web-reply$/);
+      if (importMatch) {
+        const index = tasks.findIndex(item => item.id === importMatch[1] && item.ownerId === user.id);
+        if (index === -1) return send(res, 404, { error: 'Task not found.' });
+        tasks[index] = recordImportedFoReply(tasks[index], { ...json, actor: user.username });
+        await save();
+        return send(res, 200, { task: tasks[index] });
+      }
       const foMatch = path.match(/^\/api\/tasks\/([a-f0-9-]+)\/fo\/(ask|reply)$/);
       if (foMatch) {
         const id = foMatch[1];
@@ -445,18 +504,8 @@ const server = createServer(async (req, res) => {
         if (action.type === 'schedule_followup' && action.autoFollowUp === true && (tasks[index].mode === 'demo' || !connectionStatus(user.id).connected)) return send(res, 409, { error: 'Connect Fo and use a real task before scheduling an automatic follow-up.' });
         const previousStatus = tasks[index].status;
         const task = applyAction(tasks[index], action);
-        if (action.type === 'complete' && json.photoData) {
-          const match = String(json.photoData).match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/);
-          if (!match) return send(res, 400, { error: 'Use a JPEG or PNG evidence photo.' });
-          const bytes = Buffer.from(match[2], 'base64');
-          if (bytes.length > 2_000_000 || bytes.length < 8) return send(res, 400, { error: 'Evidence photo must be under 2 MB.' });
-          const valid = match[1] === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes.subarray(0, 3).equals(Buffer.from([255,216,255]));
-          if (!valid) return send(res, 400, { error: 'Evidence photo format is invalid.' });
-          const photoFile = `${task.id}-${randomUUID()}.${match[1] === 'png' ? 'png' : 'jpg'}`;
-          await mkdir(join(dataDir, 'evidence'), { recursive: true });
-          await writeFile(join(dataDir, 'evidence', photoFile), bytes);
-          task.receipt.photoFile = photoFile;
-        }
+        if (action.type === 'complete' && json.photoData) task.receipt.photoFile = await saveEvidenceImage(task.id, json.photoData);
+        if (action.type === 'add_option' && json.photoData) task.options.at(-1).evidenceFile = await saveEvidenceImage(task.id, json.photoData);
         if (action.mode === 'demo') task.mode = 'demo';
         tasks[index] = task; await save();
         if (action.mode !== 'demo' && task.status !== previousStatus) void syncGitHub(task);
@@ -466,7 +515,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET') return serveFile(path, res);
     send(res, 404, { error: 'Not found.' });
   } catch (error) {
-    const client = error instanceof SyntaxError || /required|valid|budget|closed|Cannot|Unknown|exceeds|large/.test(error.message);
+    const client = error instanceof SyntaxError || /required|valid|budget|closed|Cannot|Unknown|exceeds|large|Evidence|Paste|open live|original Wajo|future/.test(error.message);
     send(res, client ? 400 : 500, { error: client ? error.message : 'Server error.' });
     if (!client) console.error(error);
   }

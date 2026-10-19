@@ -35,7 +35,7 @@ test('accounts only access their own tasks and receipts', async () => {
   }
   try {
     let ready = false;
-    for (let attempt = 0; attempt < 50; attempt++) {
+    for (let attempt = 0; attempt < 100; attempt++) {
       try { await request('/api/auth/session'); ready = true; break; }
       catch { await new Promise(resolve => setTimeout(resolve, 100)); }
     }
@@ -61,16 +61,19 @@ test('accounts only access their own tasks and receipts', async () => {
     assert.equal((await request(`/api/tasks/${id}/demo-next`, { method: 'POST', body: '{}' }, alice.cookie)).status, 409);
     assert.equal((await request(`/api/tasks/${id}/fo/ask`, { method: 'POST', body: JSON.stringify({ intent: 'research', authorized: true }) }, bob.cookie)).status, 404);
     assert.equal((await request(`/api/tasks/${id}/fo/reply`, { method: 'POST', body: '{}' }, bob.cookie)).status, 404);
+    assert.equal((await request(`/api/tasks/${id}/fo/import-web-reply`, { method: 'POST', body: '{}' }, bob.cookie)).status, 404);
     assert.equal((await request('/api/status', {}, alice.cookie)).body.fo.connected, false);
     assert.equal((await request('/api/status', {}, bob.cookie)).body.fo.connected, false);
     assert.equal((await request('/api/github/sync', { method: 'POST', body: '{}' }, bob.cookie)).status, 403);
     assert.equal((await request(`/api/tasks/${id}`, {}, alice.cookie)).status, 200);
     await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'start' }) }, alice.cookie);
-    const quoted = await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'add_option', vendor: 'Print shop', price: 25 }) }, alice.cookie);
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/8QAAAABJRU5ErkJggg==';
+    const quoted = await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'add_option', vendor: 'Print shop', price: 25, sourceMessage: 'One print at $25', photoData: `data:image/png;base64,${png}` }) }, alice.cookie);
     const optionId = quoted.body.task.options[0].id;
+    assert.equal((await request(`/api/tasks/${id}/option-evidence/${optionId}`, {}, bob.cookie)).status, 404);
+    assert.equal((await fetch(`${base}/api/tasks/${id}/option-evidence/${optionId}`, { headers: { Cookie: alice.cookie } })).status, 200);
     await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'approve', optionId }) }, alice.cookie);
     await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'book', confirmation: 'Confirmed for pickup' }) }, alice.cookie);
-    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/8QAAAABJRU5ErkJggg==';
     assert.equal((await request(`/api/tasks/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'complete', evidence: 'Picked up and photographed', verified: true, photoData: `data:image/png;base64,${png}` }) }, alice.cookie)).status, 200);
     assert.equal((await request(`/api/tasks/${id}/evidence`, {}, bob.cookie)).status, 404);
     const privateEvidence = await fetch(`${base}/api/tasks/${id}/evidence`, { headers: { Cookie: alice.cookie } });

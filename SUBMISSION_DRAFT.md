@@ -13,7 +13,7 @@
 - One real poster task was sent to Fo. Wajo shows CopyMat's itemized $130.89 response and its correction that pickup cannot be before noon, whereas the task's limit was $40 and the requested time was 9 AM. Fo asked clarifying follow-ups; no order or payment was made. The original Wajo reply and quote are not yet imported into that task's app record. There is no print-ready file, pickup, or completion proof.
 - The first run predates exact MCP-call telemetry. Its export contains the saved Fo request and responses but labels later tool names as unattributed. The approval sent in Wajo's own chat is outside the app trace. A new run through the updated app is needed for a complete app-to-Fo trace.
 - The demo workspace and “Simulate next step” remain simulated. Never present those cards as live Fo outcomes. The new `fo_showcase` account is empty until a fresh real task is created and sent.
-- GitHub issue [#1](https://github.com/BlackBeanEagles/fo/issues/1) was imported into the `hge` workspace. A new, smaller inquiry, [issue #2](https://github.com/BlackBeanEagles/fo/issues/2), was imported into the `fooo` workspace. Issue #2 has not yet started a Fo run or received an issue status update, so the full issue-to-Fo-to-issue loop remains unverified.
+- GitHub issue [#1](https://github.com/BlackBeanEagles/fo/issues/1) was imported into the `hge` workspace. A new, smaller inquiry, [issue #2](https://github.com/BlackBeanEagles/fo/issues/2), was imported into the `fooo` workspace and sent through Fo MCP. Fo's own send log says three inquiry emails went out to Above & Beyond Catering, Wildseed, and SF Catering Company; MCP returned that correction in the existing conversation. No provider has replied, and no GitHub status comment has been posted, so the full issue-to-Fo-to-issue loop remains unverified.
 
 ## Form fields to prepare
 
@@ -29,7 +29,7 @@
 
 **F — Run trace:** Export the redacted JSON from the real task and its proof packet. For the current older run, disclose its partial provenance. For a stronger submission, run a fresh task through the updated app and export its exact `ask_fo` and `get_fo_reply` calls. Fo's internal email and phone calls are not exposed by this app; show Wajo's actual action evidence separately if available. Owner-entered provider notes are labeled as logs, not authenticated records.
 
-**G — Run count:** Count distinct real tasks sent to Fo in the workspace selected for the demo; count success only after human-verified completion. Read the current numbers from that workspace immediately before submitting. The newly imported issue #2 has **0 Fo runs and 0 verified successes** so far.
+**G — Run count:** Count distinct real tasks sent to Fo in the workspace selected for the demo; count success only after human-verified completion. Read the current numbers from that workspace immediately before submitting. The `fooo` workspace currently shows **2 distinct Fo task runs and 0 human-verified outcomes**; issue #2 is one of those runs. Its trace contains one failed transport attempt, one successful `ask_fo`, and one `get_fo_reply` call. Confirm these numbers again before submitting.
 
 ## X caption draft
 

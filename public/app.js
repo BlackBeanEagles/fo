@@ -353,7 +353,11 @@ function renderDetail(task) {
   });
   if (githubIssueUrl(task)) {
     const sync = task.githubSync;
-    const stateLabel = !state.githubCommentsEnabled ? 'Status comments not configured' : sync?.state === 'synced' && sync.taskUpdatedAt === task.updatedAt ? 'Latest status posted' : sync?.state === 'failed' ? 'GitHub update failed' : 'GitHub update pending';
+    const stateLabel = !state.githubCommentsEnabled
+      ? 'Status comments not configured'
+      : sync?.state === 'synced'
+        ? sync.taskUpdatedAt === task.updatedAt ? 'Latest status posted' : 'Earlier status posted · workspace activity newer'
+        : sync?.state === 'failed' ? 'GitHub update failed' : 'GitHub update pending';
     panel.querySelector('.fact-row')?.insertAdjacentHTML('beforebegin', `<div class="fo-result github-loop"><div class="fo-result-top"><strong>GitHub issue loop</strong><span>${esc(stateLabel)}</span></div><p><a href="${githubIssueUrl(task)}" target="_blank" rel="noopener noreferrer">Open issue #${task.source.issue} ↗</a>${sync?.commentUrl && /^https:\/\/github\.com\//.test(sync.commentUrl) ? ` · <a href="${esc(sync.commentUrl)}" target="_blank" rel="noopener noreferrer">Inspect status comment ↗</a>` : ''}</p><div class="fo-result-note">Only status goes to GitHub. Private vendor messages, prices, and receipts stay in this workspace.${sync?.state === 'failed' ? ` Last error: ${esc(sync.error || 'Unknown error')}.` : ''}</div></div>`);
   }
   const contract = document.createElement('div');

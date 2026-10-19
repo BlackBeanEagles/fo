@@ -29,3 +29,12 @@ test('real completion needs a defined outcome and human evidence', () => {
   task = applyAction(task, { type: 'edit', title: task.title, doneWhen: 'A vendor provides a written quote.' });
   assert.throws(() => applyAction(task, { type: 'complete', evidence: 'A quote arrived' }), /person checked/);
 });
+
+test('an empty MCP reply does not count as a Fo report in the proof packet', () => {
+  const reply = { text: 'The run finished without a textual reply.', status: 'complete', conversationId: 'private-conversation' };
+  const task = recordFoExchange(createTask({ title: 'Restock office fridge', doneWhen: 'Delivery checked by a person.' }), { intent: 'research', prompt: 'Get quotes', reply });
+  const packet = exportProofPacket(task);
+  assert.equal(packet.evidenceState.foReports, 0);
+  assert.equal(packet.milestones.at(-1).source, 'Fo MCP status only');
+  assert.equal(packet.evidenceState.humanVerified, false);
+});

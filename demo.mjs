@@ -10,9 +10,9 @@ export function createDemoWorkspace() {
   }, { type: 'demo' });
   let a = applyAction(repair, { type: 'start', note: 'Simulated: Fo called local repair shops and asked for availability.', channel: 'call', ...demo });
   a = applyAction(a, { type: 'message', party: 'Demo Device Clinic', direction: 'inbound', note: 'We can visit tomorrow between 2 and 4 PM. Diagnostics are included.', channel: 'call', ...demo });
-  a = applyAction(a, { type: 'add_option', vendor: 'Demo Device Clinic', price: 145, availability: 'Tomorrow, 2–4 PM', details: 'Diagnostics and on-site visit. Simulated quote.', channel: 'call', ...demo });
+  a = applyAction(a, { type: 'add_option', vendor: 'Demo Device Clinic', price: 145, availability: 'Tomorrow, 2–4 PM', details: 'Diagnostics and on-site visit. Simulated quote.', source: 'Simulated phone call', channel: 'call', ...demo });
   a = applyAction(a, { type: 'message', party: 'Demo AV Rescue', direction: 'inbound', note: 'Friday at 9 AM is open. Replacement cable is included.', channel: 'email', ...demo });
-  a = applyAction(a, { type: 'add_option', vendor: 'Demo AV Rescue', price: 175, availability: 'Friday, 9 AM', details: 'Includes replacement cable. Simulated quote.', channel: 'call', ...demo });
+  a = applyAction(a, { type: 'add_option', vendor: 'Demo AV Rescue', price: 175, availability: 'Friday, 9 AM', details: 'Includes replacement cable. Simulated quote.', source: 'Simulated email', channel: 'email', ...demo });
   a.mode = 'demo';
 
   const lunch = createTask({
@@ -30,7 +30,7 @@ export function createDemoWorkspace() {
     doneWhen: 'The requested items arrive and a teammate checks the delivery.'
   }, { type: 'demo' });
   let c = applyAction(supplies, { type: 'start', note: 'Simulated: Fo compared local grocery delivery options.', channel: 'web', ...demo });
-  c = applyAction(c, { type: 'add_option', vendor: 'Demo Market Delivery', price: 78, availability: 'Monday, 8–9 AM', details: 'All requested items in stock. Simulated quote.', channel: 'web', ...demo });
+  c = applyAction(c, { type: 'add_option', vendor: 'Demo Market Delivery', price: 78, availability: 'Monday, 8–9 AM', details: 'All requested items in stock. Simulated quote.', source: 'Simulated catalog', channel: 'web', ...demo });
   c = applyAction(c, { type: 'approve', optionId: c.options[0].id, actor: 'Demo team member', mode: 'demo', channel: 'human' });
   c = applyAction(c, { type: 'book', confirmation: 'DEMO-ORDER-248 (simulated)', channel: 'purchase', ...demo });
   c.mode = 'demo';
@@ -39,10 +39,10 @@ export function createDemoWorkspace() {
 
 export function demoActionFor(task) {
   const preset = {
-    repair: { vendor: 'Demo Device Clinic', price: 145, availability: 'Tomorrow, 2–4 PM', details: 'Simulated quote after a vendor call.' },
-    event: { vendor: 'Demo Lunch Studio', price: 210, availability: 'Tomorrow, noon', details: 'Vegetarian options included. Simulated email quote.' },
-    purchase: { vendor: 'Demo Market Delivery', price: 78, availability: 'Monday, 8–9 AM', details: 'Simulated delivery quote.' },
-    other: { vendor: 'Demo Provider', price: 120, availability: 'Tomorrow', details: 'Simulated option.' }
+    repair: { vendor: 'Demo Device Clinic', price: 145, availability: 'Tomorrow, 2–4 PM', details: 'Simulated quote after a vendor call.', source: 'Simulated phone call' },
+    event: { vendor: 'Demo Lunch Studio', price: 210, availability: 'Tomorrow, noon', details: 'Vegetarian options included. Simulated email quote.', source: 'Simulated email' },
+    purchase: { vendor: 'Demo Market Delivery', price: 78, availability: 'Monday, 8–9 AM', details: 'Simulated delivery quote.', source: 'Simulated catalog' },
+    other: { vendor: 'Demo Provider', price: 120, availability: 'Tomorrow', details: 'Simulated option.', source: 'Simulated source' }
   }[task.category || 'other'];
   if (task.status === 'new') return { type: 'start', note: 'Simulated: Fo began researching and contacting providers.', channel: task.category === 'event' ? 'email' : task.category === 'repair' ? 'call' : 'web', ...demo };
   if (task.status === 'working') return { type: 'add_option', ...preset, channel: task.category === 'event' ? 'email' : task.category === 'repair' ? 'call' : 'web', ...demo };

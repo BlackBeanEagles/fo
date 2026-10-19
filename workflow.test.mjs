@@ -20,7 +20,8 @@ test('a booking is not treated as completed without human evidence', () => {
 test('over-budget choices need an explicit override', () => {
   let task = createTask({ title: 'Book a repair', budget: 100 });
   task = applyAction(task, { type: 'start' });
-  task = applyAction(task, { type: 'add_option', vendor: 'Repair Co', price: 140 });
+  task = applyAction(task, { type: 'add_option', vendor: 'Repair Co', price: 140, source: 'Provider email received by owner' });
+  assert.equal(task.options[0].source, 'Provider email received by owner');
   assert.throws(() => applyAction(task, { type: 'approve', optionId: task.options[0].id }), /exceeds the budget/);
   task = applyAction(task, { type: 'approve', optionId: task.options[0].id, overrideBudget: true });
   assert.equal(task.status, 'approved');

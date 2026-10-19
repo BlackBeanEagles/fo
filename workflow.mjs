@@ -55,7 +55,7 @@ export function applyAction(task, action) {
       const vendor = clean(action.vendor, 120);
       if (!vendor) throw new Error('Vendor or option name is required.');
       const price = parseMoney(action.price);
-      const option = { id: randomUUID(), vendor, price, availability: clean(action.availability, 160), details: clean(action.details, 500), addedAt: now };
+      const option = { id: randomUUID(), vendor, price, availability: clean(action.availability, 160), details: clean(action.details, 500), source: clean(action.source, 160), addedAt: now };
       next.options.push(option);
       next.status = 'awaiting_approval';
       text = `Option added: ${vendor} at $${price.toFixed(2)}.`;

@@ -26,7 +26,7 @@ Fo authorization is encrypted at rest under `.data/fo-connections/` with a key d
 
 The signed-in board has a full-screen workspace photo and a **Live evidence** strip. Its numbers distinguish real Fo runs, owner-logged provider replies, owner-approved options, and human-verified outcomes for the current account. **Live tasks** and **Samples** filter the board without merging their data. **Copy safe snapshot** puts only aggregate counts and provenance caveats on the clipboard; it excludes task names, vendors, contact details, and private proof.
 
-The **Load demo workspace** and **Simulate next step** paths are labeled simulated and never call Fo. A Fo response, including one with status `complete`, does not automatically mark a task booked or verified.
+The **Load demo workspace** and **Simulate next step** paths are labeled simulated and never call Fo. A Fo response, including one with status `complete`, does not automatically mark a task booked or verified. When MCP returns a waiting instruction or no textual reply, the board labels it as such, keeps the original message in an expandable trace, and links to the matching Fo conversation. The Fo web conversation may have details that `get_fo_reply` did not return; check it before claiming an outcome.
 
 ## GitHub issue integration
 
